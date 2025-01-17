@@ -1,0 +1,1 @@
+{"model_name": ["MFP"], "deviance": [21123.766528359458], "AIC": [42253.533056718916], "free_parameters": [{"belief_strength": 1.0, "go_drive": 1.0, "inverse_temperature": 1.0}]}

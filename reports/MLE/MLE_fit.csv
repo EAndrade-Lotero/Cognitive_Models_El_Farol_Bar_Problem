@@ -1,0 +1,8 @@
+model_name,deviance,AIC,free_parameters
+Random,21747.66576501953,43497.33153003906,{'go_prob': 0.5780715269459651}
+WSLS,69445.89423528443,138897.78847056886,"{'go_drive': 0.48873272287485303, 'inverse_temperature': 53.99425644513326, 'wsls_strength': 9.790684383645772}"
+QL,20579.126158179613,41166.25231635923,"{'discount_factor': 0.8533513418374531, 'go_drive': 0.20209413905617302, 'inverse_temperature': 1.8845637880978172, 'learning_rate': 0.13448565714128402}"
+MFPAgg,21247.689500990517,42501.37900198103,"{'belief_strength': 1.0, 'go_drive': 0.0, 'inverse_temperature': 1.0}"
+PRW,22152.983890695843,44313.967781391686,"{'initial_reward_estimate_go': 0.0, 'initial_reward_estimate_no_go': 0.0, 'inverse_temperature': 50.120746828232306, 'learning_rate': 0.0}"
+ARW,22152.983890695843,44311.967781391686,"{'initial_luft_estimate': 0.0, 'inverse_temperature': 15.13604951716529, 'learning_rate': 0.0}"
+MFP,21123.766528359458,42253.533056718916,"{'belief_strength': 1.0, 'go_drive': 1.0, 'inverse_temperature': 1.0}"
