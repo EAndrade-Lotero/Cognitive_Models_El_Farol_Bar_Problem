@@ -17,7 +17,8 @@ from seaborn import (
     boxplot,
     violinplot,
 	kdeplot,
-	scatterplot
+	scatterplot,
+	heatmap
 )
 
 from Utils.utils import (
@@ -32,7 +33,7 @@ from Utils.utils import (
 
 class PlotsAndMeasures :
 	'''
-	Gathers a number of frequently used visualizations.
+	Plots frequently used visualizations.
 	'''
 
 	def __init__(self, data:pd.DataFrame) -> None:
@@ -923,7 +924,14 @@ class PlotsAndMeasures :
 		else:
 			print('Warning: No plot saved by plot_hist_state_transitions. To save plot, provide file name.')
 
-	def plot_scores_sweep2(self, parameter1:str, parameter2:str, file:str=None) -> plt.axis:
+	def plot_scores_sweep2(
+				self, 
+				parameter1:str,
+				parameter2:str,
+				T:Optional[int]=20,
+				file:Optional[Union[Path, None]]=None,
+				kwargs:Optional[Dict[str,any]]={}
+			) -> None:
 		'''
 		Plots the average scores according to sweep of two parameters.
 		Input:
@@ -933,22 +941,34 @@ class PlotsAndMeasures :
 		Output:
 			- axis, a plt object, or None.
 		'''
-		# Keep only last 20% of rounds
-		num_rounds = max(self.data['round'].unique())
-		cut = int(num_rounds * 0.8)
-		df = self.data[self.data['round'] > cut].reset_index()
+		if T is None:
+			T = 20
+		annot = kwargs.get('annot', False)
+		# Keep only last T of rounds
+		num_rounds = self.data['round'].max()
+		df = self.data[self.data['round'] > num_rounds - T].reset_index()
 		# Find average score per pair of parameters' values
 		df = df.groupby([parameter2, parameter1])['score'].mean().reset_index()
-		fig, ax = plt.subplots(figsize=(4,3.5))
-		ax = lineplot(x=parameter1, y='score', hue=parameter2, marker='o', data=df, ci=None)
-		ax.set_xlabel(parameter1)
-		ax.set_ylabel('Av. Score')
-		ax.set_ylim([-1.1, 1.1])
-		ax.grid()
+		values1 = df[parameter1].unique()
+		values2 = df[parameter2].unique()
+		df = pd.pivot(
+			data=df,
+			index=[parameter1],
+			values=['score'],
+			columns=[parameter2]
+		).reset_index().to_numpy()[:,1:]
+		# Plotting...
+		fig, ax = plt.subplots(figsize=(6,6))
+		heatmap(data=df, ax=ax, annot=annot)
+		ax.set_xticklabels(np.round(values2, 2))
+		ax.set_xlabel(parameter2)
+		ax.set_yticklabels(np.round(values1, 2))
+		ax.set_ylabel(parameter1)
+		ax.set_title('Av. Score')
 		if file is not None:
 			plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
 			print('Plot saved to', file)
-		return fig
+		fig.close()
 
 	def plot_EQ(self, mu:float, file:str=None) -> plt.axis:
 		'''

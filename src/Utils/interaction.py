@@ -6,7 +6,7 @@ import uuid
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from time import sleep
 from pathlib import Path
 from copy import deepcopy
@@ -149,7 +149,7 @@ class Episode :
 		'''		
 		data_frames= list()
 		# Run the number of episodes
-		for t in tqdm(range(num_episodes)):
+		for t in tqdm(range(num_episodes), leave=False):
 			self.id = uuid.uuid1()			
 			for agent in self.agents:
 				agent.reset()
@@ -371,7 +371,7 @@ class Experiment :
 		df_list= list()
 		# Creates list of agents
 		for value1 in tqdm(values1):
-			for value2 in tqdm(values2):
+			for value2 in tqdm(values2, leave=False):
 				agents_parameter= list()
 				for agent in self.agents:
 					agent_ = deepcopy(agent)

@@ -661,7 +661,6 @@ class QAttendance(CogMod) :
 		self.learning_rate = free_parameters["learning_rate"]
 		self.discount_factor = free_parameters["discount_factor"]
 		self.go_drive = free_parameters["go_drive"]
-		self.strength = free_parameters["strength"]
 		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
@@ -727,20 +726,24 @@ class QAttendance(CogMod) :
 			- previous_state, list of decisions on previous round
 			- new_state, list of decisions obtained after decisions
 		'''
+		# Get average go frequency
+		average_go = sum([self.discount_factor**(i+1) * x  for i, x in enumerate(self.decisions[::-1])])
+		# Get round payoff
+		payoff = self.payoff(action, previous_state)
 		# Bootstrap max expected long term reward
 		max_bootstrap = self.maxQ(new_state)
-		# Get round reward including average go frequency
-		average_go = np.mean(self.decisions)
-		payoff = self.strength * average_go + (1 - self.strength) * self.payoff(action, new_state)
 		# Estimage long term reward for state-action pair
-		G = payoff + self.discount_factor * max_bootstrap
+		long_term_reward = payoff + self.discount_factor * max_bootstrap
+		# Update
+		G = average_go + long_term_reward
 		# Determine error prediction
 		index_previous_state = self._get_index(previous_state)
 		delta = G - self.Q[index_previous_state, action]
 		# Update Q table
 		if self.debug:
-			print(f'Average go frequency: {np.mean(self.decisions)}')
-			print(f'Reward with average go frequency: {payoff}')
+			print(f'Discounted average go frequency: {average_go}')
+			print(f'Reward: {payoff}')
+			print(f'Reward with average go frequency: {G}')
 			print('Learning rule:')
 			print(f'Q[{previous_state},{action}] <- {self.Q[index_previous_state, action]} + {self.learning_rate} * ({G} - {self.Q[index_previous_state, action]})')
 		self.Q[index_previous_state, action] += self.learning_rate * delta
@@ -813,7 +816,6 @@ class QFairness(CogMod) :
 		self.learning_rate = free_parameters["learning_rate"]
 		self.discount_factor = free_parameters["discount_factor"]
 		self.go_drive = free_parameters["go_drive"]
-		self.strength = free_parameters["strength"]
 		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
@@ -879,21 +881,27 @@ class QFairness(CogMod) :
 			- previous_state, list of decisions on previous round
 			- new_state, list of decisions obtained after decisions
 		'''
+		# Get average go frequency
+		average_go = sum([self.discount_factor**(i) * x  for i, x in enumerate(self.decisions[::-1])])
+		# Get fair go average
+		fair_go = self.threshold - average_go
+		# Get round payoff
+		payoff = self.payoff(action, previous_state)
 		# Bootstrap max expected long term reward
 		max_bootstrap = self.maxQ(new_state)
-		# Get round reward including fair go average
-		fair_go = self.threshold - np.mean(self.decisions)
-		payoff = self.strength * fair_go + (1 - self.strength) * self.payoff(action, new_state)
 		# Estimage long term reward for state-action pair
-		G = payoff + self.discount_factor * max_bootstrap
+		long_term_reward = payoff + self.discount_factor * max_bootstrap
+		# Update
+		G = fair_go + long_term_reward
 		# Determine error prediction
 		index_previous_state = self._get_index(previous_state)
 		delta = G - self.Q[index_previous_state, action]
 		# Update Q table
 		if self.debug:
-			print(f'Fairness go average: {self.threshold - np.mean(self.decisions)}')
-			print(f'Average go frequency: {np.mean(self.decisions)}')
-			print(f'Reward with average go frequency: {payoff}')
+			print(f'Discounted average go frequency: {average_go}')
+			print(f'Go fairness: {fair_go}')
+			print(f'Reward: {payoff}')
+			print(f'Reward with average go frequency: {G}')
 			print('Learning rule:')
 			print(f'Q[{previous_state},{action}] <- {self.Q[index_previous_state, action]} + {self.learning_rate} * ({G} - {self.Q[index_previous_state, action]})')
 		self.Q[index_previous_state, action] += self.learning_rate * delta
