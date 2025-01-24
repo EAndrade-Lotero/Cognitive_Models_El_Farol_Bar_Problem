@@ -8,7 +8,13 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 from pathlib import Path
-from typing import List, Union, Optional, Dict
+from typing import (
+	List, 
+	Union, 
+	Optional, 
+	Dict, 
+	Tuple
+)
 from seaborn import (
     lineplot, 
     swarmplot, 
@@ -29,6 +35,149 @@ from Utils.utils import (
 	GetMeasures
 )
 
+
+class PlotStandardMeasures :
+	'''
+	Plots standard measures
+	'''
+	dpi = 300
+	extension = 'pdf'
+	width = 3
+	height = 3.5
+	cmaps = ["Blues", "Reds", "Greens", "Yellows"]
+	standard_measures = [
+		'attendance', 
+		'efficiency', 
+		'inequality',
+		'entropy',
+		'conditional_entropy',
+	]
+	
+	def __init__(self, data:pd.DataFrame) -> None:
+		'''
+		Input:
+			- data, pandas dataframe
+		'''
+		self.data = data
+
+	def plot_measures(
+				self, 
+				measures: List[str], 
+				folder: Union[None, Path],
+				kwargs: Optional[Union[Dict[str, str], None]]=None,
+				suffix: Optional[Union[None, str]]=None
+			) -> List[Path]:
+		'''
+		DOCUMENTATION MISSING
+		'''
+		non_standard_measures = set(measures).difference(self.standard_measures)
+		assert(len(non_standard_measures) == 0), f'Measures {non_standard_measures} cannot be ploted by this class.'
+		# Initialize output list
+		list_of_paths = list()
+		# Tidy suffix
+		if suffix is None:
+			suffix = ''
+		else:
+			suffix = '_' + suffix
+		# Tidy kwargs
+		if kwargs is None:
+			kwargs = dict()
+		T = kwargs.get('T', 20)
+		# Determine the number of model in data
+		if 'only_value' in kwargs.keys():
+			if kwargs['only_value']:
+				self.data.model = self.data.model.apply(lambda x: x.split('=')[-1])
+		models = self.data.model.unique()
+		num_models = len(models)
+		vs_models = True if len(models) > 1 else False
+		kwargs['num_models'] = num_models
+		kwargs['vs_models'] = vs_models
+		# Obtain data
+		get_meas = GetMeasures(
+			self.data, measures=measures, T=T)
+		data = get_meas.get_measures()
+		# Plot per measure
+		for m in measures:
+			if folder is not None:
+				file_ = PathUtils.add_file_name(folder, f'{m}{suffix}', self.extension)
+			print(f'Plotting {m}...')
+			kwargs_ = kwargs.copy()
+			if 'title' not in kwargs_.keys():
+				kwargs_['title'] = m[0].upper() + m[1:]
+			self.plot(
+				measure=m, 
+				data=data,
+				kwargs=kwargs_,
+				file=file_
+			)
+			list_of_paths.append(file_)
+		return list_of_paths	
+
+	def plot(
+				self, 
+				measure: str,
+				data: pd.DataFrame,
+				kwargs: Dict[str,any],
+				file: Optional[Union[Path, None]]=None
+			) -> Union[plt.axis, None]:
+		'''
+		Plots the variable against the models.
+		Input:
+			- kwargs: dict with additional setup values for plots
+			- file, path of the file to save the plot on.
+		Output:
+			- None.
+		'''
+		num_models = kwargs['num_models']
+		vs_models = kwargs['vs_models']
+		# Create the plot canvas
+		fig, ax = plt.subplots(
+			figsize = (self.width * num_models, self.height),
+			tight_layout=True
+		)
+		variable = measure
+		if vs_models:
+			lineplot(
+				x='model', y=variable, 
+				data=data, ax=ax, 
+				errorbar=('ci', 95)
+			)
+			ax.set_xlabel('Model')
+			ax.set_ylabel(variable)
+			# ax.set_ylim([-1.1, 1.1])
+		else:
+			histplot(data[variable], ax=ax)
+			ax.set_xlabel(variable)
+			# ax.set_xlim([-1.1, 1.1])
+			ax.set_ylabel('Num. of players')
+		# Set further information on plot
+		ax = self._customize_ax(ax, kwargs)
+		# Save or return plot
+		if file is not None:
+			plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
+			print('Plot saved to', file)
+			plt.close()
+		else:
+			print('Warning: No plot saved by plot_efficiency. To save plot, provide file name.')
+			return ax
+
+	def _customize_ax(
+				self, 
+				ax:plt.axis, 
+				kwargs:Dict[str,any]
+			) -> plt.axis:
+		if 'title' in kwargs.keys():
+			ax.set_title(kwargs['title'])			
+		if 'title_size' in kwargs.keys():
+			ax.title.set_size(kwargs['title_size'])
+		if 'x_label' in kwargs.keys():
+			ax.set_xlabel(kwargs['x_label'])
+		if 'x_label_size' in kwargs.keys():
+			ax.xaxis.label.set_size(kwargs['x_label_size'])
+		if 'y_label_size' in kwargs.keys():
+			ax.yaxis.label.set_size(kwargs['y_label_size'])
+		ax.grid()
+		return ax
 
 
 class PlotsAndMeasures :
@@ -968,7 +1117,7 @@ class PlotsAndMeasures :
 		if file is not None:
 			plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
 			print('Plot saved to', file)
-		fig.close()
+		plt.close()
 
 	def plot_EQ(self, mu:float, file:str=None) -> plt.axis:
 		'''

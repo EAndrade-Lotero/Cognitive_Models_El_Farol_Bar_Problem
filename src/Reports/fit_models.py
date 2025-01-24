@@ -17,15 +17,15 @@ best_fit_file = Path(folder, f'best_fit.json')
 # Load data into a dataframe
 file_names = [
 	'2-player-UR.csv',
-	# '3-player-IU.csv',
-	# '4-player-IU.csv',
-	# '5-player-IU.csv',
-	# '6-player-IU.csv',
-	# '7-player-IU.csv',
-	# '8-player-IU.csv',
-	# '9-player-IU.csv',
-	# '11-player-IU.csv',
-	# '12-player-IU.csv',
+	'3-player-IU.csv',
+	'4-player-IU.csv',
+	'5-player-IU.csv',
+	'6-player-IU.csv',
+	'7-player-IU.csv',
+	'8-player-IU.csv',
+	'9-player-IU.csv',
+	'11-player-IU.csv',
+	'12-player-IU.csv',
 ]
 df_list = list()
 for file_name in file_names:
@@ -52,7 +52,7 @@ def fit_models():
 	# MODELS is a dictionary with the free parameters for 
 	# each model and comes from Classes.cognitive_model_agents
 	for model_name, model in MODELS.items():
-		# if model_name not in ['MFP']:
+		# if model_name not in ['QAttendance', 'QFairness']:
 		# 	continue
 		print(f'Fitting data to model {model_name}...')
 		best_fit['model_name'].append(model_name)
@@ -73,3 +73,7 @@ def fit_models():
 	with open(best_fit_file, 'w') as f:
 		json.dump(best_fit, f)
 	print(f'Model recovery data writen to file {best_fit_file}')
+
+
+if __name__ == '__main__':
+	fit_models()

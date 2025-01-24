@@ -18,7 +18,7 @@ from typing import List, Dict, Tuple, Union, Optional
 from Classes.bar import Bar
 from Utils.LaTeX_utils import PrintLaTeX
 from Classes.agent_utils import ProxyDict
-from Utils.plot_utils import PlotsAndMeasures
+from Utils.plot_utils import PlotsAndMeasures, PlotStandardMeasures
 from Classes.cognitive_model_agents import *
 from Classes.agents import *
 
@@ -333,7 +333,7 @@ class Experiment :
 			self.data.to_csv(file_data, index=False)
 			print(f'Data saved to {file_data}')
 		# Create plot object
-		p = PlotsAndMeasures(self.data)
+		p = PlotStandardMeasures(self.data)
 		# Plot on each given measure
 		list_of_paths = p.plot_measures(
 			measures=self.measures,
@@ -395,14 +395,6 @@ class Experiment :
 				df_list.append(df)
 		# Concatenate dataframes
 		self.data = pd.concat(df_list, ignore_index=True)
-		p = PlotsAndMeasures(self.data)
-		for m in self.measures:
-			if m == 'score':
-				ax = p.plot_scores_sweep2(parameter1=parameter1,\
-										parameter2=parameter2,\
-										file=file
-										)
-			plt.show()
 
 
 

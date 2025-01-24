@@ -82,7 +82,7 @@ class CogMod () :
 			preferences = self.determine_action_preferences(self.prev_state_)
 			probabilities = self.softmax(preferences)
 			if self.debug:
-				print('Probabilities:')
+				print('Action probabilities:')
 				print(f'no go:{probabilities[0]} ---- go:{probabilities[1]}')
 			return probabilities[1]
 		else:
@@ -123,7 +123,8 @@ class CogMod () :
 		'''
 		# Broadcast inverse temperature and exponential
 		# print('\tPreferences:', preferences)
-		numerator = np.exp(self.inverse_temperature * np.array(preferences))
+		# numerator = np.exp(self.inverse_temperature * np.array(preferences))
+		numerator = np.exp(self.inverse_temperature * np.array(preferences) - np.max(preferences)) # <= subtracted max for numerical stability
 		num_inf = [np.isinf(x) for x in numerator]
 		if sum(num_inf) == 1:
 			softmax_values = [1 if np.isinf(x) else 0 for x in numerator]
@@ -557,7 +558,7 @@ class Q_learning(CogMod) :
 			# Agent learns
 			self.learn(
 				action=action,
-				previous_state=self.prev_state_,
+				payoff=score,
 				new_state=obs_state
 			)
 		# Update records
@@ -568,7 +569,7 @@ class Q_learning(CogMod) :
 	def learn(
 				self,
 				action: int,
-				previous_state: List[int],
+				payoff: float,
 				new_state: List[int]
 			) -> None:
 		'''
@@ -578,10 +579,10 @@ class Q_learning(CogMod) :
 			- previous_state, list of decisions on previous round
 			- new_state, list of decisions obtained after decisions
 		'''
+		# Get previous state
+		previous_state = self.prev_state_
 		# Bootstrap max expected long term reward
 		max_bootstrap = self.maxQ(new_state)
-		# Get round payoff
-		payoff = self.payoff(action, new_state)
 		# Estimage long term reward for state-action pair
 		G = payoff + self.discount_factor * max_bootstrap
 		# Determine error prediction
@@ -635,7 +636,7 @@ class Q_learning(CogMod) :
 		return 'Qlearning'
 
 
-class QAttendance(CogMod) :
+class QAttendance(Q_learning) :
 	'''
 	Defines the model of reinforcement learning that estimates
 	long term actions payoffs using the q_learning rule.
@@ -660,6 +661,7 @@ class QAttendance(CogMod) :
 		#----------------------
 		self.learning_rate = free_parameters["learning_rate"]
 		self.discount_factor = free_parameters["discount_factor"]
+		self.go_discount_factor = free_parameters["go_discount_factor"]
 		self.go_drive = free_parameters["go_drive"]
 		#----------------------
 		# Bookkeeping for go preference
@@ -674,48 +676,10 @@ class QAttendance(CogMod) :
 		self.backup_Q[:,0] = 0
 		self.Q = deepcopy(self.backup_Q)
 
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
-		'''
-		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
-		Output:
-			- List with no go preference followed by go preference
-		'''
-		if previous_state is None:
-			return [0, 0]
-		else:
-			index_previous_state = self._get_index(previous_state)
-			return self.Q[index_previous_state, :]
-
-	def update(self, score:int, obs_state:tuple):
-		'''
-		Agent updates its model.
-		Input:
-			- score, a number 0 or 1.
-			- obs_state_, a tuple with the sate of current round,
-						where each argument is 0 or 1.
-		'''
-		action = obs_state[self.number]
-		if self.prev_state_ is not None:
-			# Agent learns
-			self.learn(
-				action=action,
-				previous_state=self.prev_state_,
-				new_state=obs_state
-			)
-		# Update records
-		self.scores.append(score)
-		self.decisions.append(action)
-		self.prev_state_ = obs_state
-
 	def learn(
 				self,
 				action: int,
-				previous_state: List[int],
+				payoff: float,
 				new_state: List[int]
 			) -> None:
 		'''
@@ -726,10 +690,12 @@ class QAttendance(CogMod) :
 			- previous_state, list of decisions on previous round
 			- new_state, list of decisions obtained after decisions
 		'''
-		# Get average go frequency
-		average_go = sum([self.discount_factor**(i+1) * x  for i, x in enumerate(self.decisions[::-1])])
-		# Get round payoff
-		payoff = self.payoff(action, previous_state)
+		# Get previous state
+		previous_state = self.prev_state_
+		# Get discounted go frequency
+		reversed_actions = [action] + self.decisions[::-1]
+		discounted_actions = [self.go_discount_factor**(i+1) * x  for i, x in enumerate(reversed_actions)]
+		average_go = sum(discounted_actions)
 		# Bootstrap max expected long term reward
 		max_bootstrap = self.maxQ(new_state)
 		# Estimage long term reward for state-action pair
@@ -741,8 +707,10 @@ class QAttendance(CogMod) :
 		delta = G - self.Q[index_previous_state, action]
 		# Update Q table
 		if self.debug:
+			print(f'Discounted actions: {discounted_actions}')
 			print(f'Discounted average go frequency: {average_go}')
 			print(f'Reward: {payoff}')
+			print(f'Estimated long term reward: {long_term_reward}')
 			print(f'Reward with average go frequency: {G}')
 			print('Learning rule:')
 			print(f'Q[{previous_state},{action}] <- {self.Q[index_previous_state, action]} + {self.learning_rate} * ({G} - {self.Q[index_previous_state, action]})')
@@ -750,47 +718,12 @@ class QAttendance(CogMod) :
 		if self.debug:
 			print(f'Q[{previous_state},{action}] = {self.Q[index_previous_state, action]}')
 
-	def maxQ(self, state: List[int]) -> float:
-		'''
-		Determines the max over actions of the estimated long term reward given a state
-		Input:
-			- state, list of decisions
-		Output:
-			- maximum of the estimated long term rewards
-		'''
-		state_index = self._get_index(state)
-		estimated_rewards = self.Q[state_index, :]
-		return max(estimated_rewards)
-
-	def _get_index(self, state: List[int]) -> int:
-		'''
-		Determines the index of a state in a Q table
-		Input:
-			- state, list of decisions
-		Output:
-			- index, integer with the index of the Q table corresponding to the state
-		'''
-		if isinstance(state, dict):
-			state_ = list(state.values())
-		else:
-			state_ = state
-		# Convert the state into a binary sequence
-		binary_sequence = "".join(str(x) for x in state_)
-		# Interpret the sequence as a decimal integer
-		index =  int(binary_sequence, 2)
-		# Return index
-		return index
-	
-	def reset(self) -> None:
-		super().reset()
-		self.Q = deepcopy(self.backup_Q)
-
 	@staticmethod
 	def name():
-		return 'Qlearning'
+		return 'QAttendance'
 
 
-class QFairness(CogMod) :
+class QFairness(Q_learning) :
 	'''
 	Defines the model of reinforcement learning that estimates
 	long term actions payoffs using the q_learning rule.
@@ -815,6 +748,7 @@ class QFairness(CogMod) :
 		#----------------------
 		self.learning_rate = free_parameters["learning_rate"]
 		self.discount_factor = free_parameters["discount_factor"]
+		self.fairness_bias = free_parameters["fairness_bias"]
 		self.go_drive = free_parameters["go_drive"]
 		#----------------------
 		# Bookkeeping for go preference
@@ -829,48 +763,10 @@ class QFairness(CogMod) :
 		self.backup_Q[:,0] = 0
 		self.Q = deepcopy(self.backup_Q)
 
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
-		'''
-		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
-		Output:
-			- List with no go preference followed by go preference
-		'''
-		if previous_state is None:
-			return [0, 0]
-		else:
-			index_previous_state = self._get_index(previous_state)
-			return self.Q[index_previous_state, :]
-
-	def update(self, score:int, obs_state:tuple):
-		'''
-		Agent updates its model.
-		Input:
-			- score, a number 0 or 1.
-			- obs_state_, a tuple with the sate of current round,
-						where each argument is 0 or 1.
-		'''
-		action = obs_state[self.number]
-		if self.prev_state_ is not None:
-			# Agent learns
-			self.learn(
-				action=action,
-				previous_state=self.prev_state_,
-				new_state=obs_state
-			)
-		# Update records
-		self.scores.append(score)
-		self.decisions.append(action)
-		self.prev_state_ = obs_state
-
 	def learn(
 				self,
 				action: int,
-				previous_state: List[int],
+				payoff: float,
 				new_state: List[int]
 			) -> None:
 		'''
@@ -881,67 +777,33 @@ class QFairness(CogMod) :
 			- previous_state, list of decisions on previous round
 			- new_state, list of decisions obtained after decisions
 		'''
+		# Get previous state
+		previous_state = self.prev_state_
 		# Get average go frequency
-		average_go = sum([self.discount_factor**(i) * x  for i, x in enumerate(self.decisions[::-1])])
-		# Get fair go average
-		fair_go = self.threshold - average_go
-		# Get round payoff
-		payoff = self.payoff(action, previous_state)
+		average_go = np.mean(self.decisions + [action])
+		# Get difference with fair number of go times 
+		fair_go = (self.threshold - average_go) * (2 * action - 1)
 		# Bootstrap max expected long term reward
 		max_bootstrap = self.maxQ(new_state)
 		# Estimage long term reward for state-action pair
 		long_term_reward = payoff + self.discount_factor * max_bootstrap
 		# Update
-		G = fair_go + long_term_reward
+		G = self.fairness_bias * fair_go + (1 - self.fairness_bias) * long_term_reward
 		# Determine error prediction
 		index_previous_state = self._get_index(previous_state)
 		delta = G - self.Q[index_previous_state, action]
 		# Update Q table
 		if self.debug:
-			print(f'Discounted average go frequency: {average_go}')
+			print(f'Average go frequency: {average_go} --- {self.decisions + [action]}')
 			print(f'Go fairness: {fair_go}')
 			print(f'Reward: {payoff}')
-			print(f'Reward with average go frequency: {G}')
+			print(f'Estimated long term reward: {long_term_reward}')
+			print(f'Reward with go fairness: {G}')
 			print('Learning rule:')
 			print(f'Q[{previous_state},{action}] <- {self.Q[index_previous_state, action]} + {self.learning_rate} * ({G} - {self.Q[index_previous_state, action]})')
 		self.Q[index_previous_state, action] += self.learning_rate * delta
 		if self.debug:
 			print(f'Q[{previous_state},{action}] = {self.Q[index_previous_state, action]}')
-
-	def maxQ(self, state: List[int]) -> float:
-		'''
-		Determines the max over actions of the estimated long term reward given a state
-		Input:
-			- state, list of decisions
-		Output:
-			- maximum of the estimated long term rewards
-		'''
-		state_index = self._get_index(state)
-		estimated_rewards = self.Q[state_index, :]
-		return max(estimated_rewards)
-
-	def _get_index(self, state: List[int]) -> int:
-		'''
-		Determines the index of a state in a Q table
-		Input:
-			- state, list of decisions
-		Output:
-			- index, integer with the index of the Q table corresponding to the state
-		'''
-		if isinstance(state, dict):
-			state_ = list(state.values())
-		else:
-			state_ = state
-		# Convert the state into a binary sequence
-		binary_sequence = "".join(str(x) for x in state_)
-		# Interpret the sequence as a decimal integer
-		index =  int(binary_sequence, 2)
-		# Return index
-		return index
-	
-	def reset(self) -> None:
-		super().reset()
-		self.Q = deepcopy(self.backup_Q)
 
 	@staticmethod
 	def name():
@@ -1351,6 +1213,26 @@ MODELS = {
 			"go_drive": 0,
 			"learning_rate": 0.001,
 			"discount_factor": 0.8
+		}
+	}, 
+	'QAttendance': {
+		'class': QAttendance,
+		'free_parameters': {
+			'inverse_temperature':10,
+			"go_drive": 0,
+			"learning_rate": 0.001,
+			"discount_factor": 0.8,
+			"go_discount_factor":0.5
+		}
+	}, 
+	'QFairness': {
+		'class': QFairness,
+		'free_parameters': {
+			'inverse_temperature':10,
+			"go_drive": 0,
+			"learning_rate": 0.001,
+			"discount_factor": 0.8,
+			"fairness_bias":0.5
 		}
 	}, 
 	'MFP': {

@@ -67,7 +67,6 @@ class ProxyDict :
         return str(table)
 
 
-
 class TransitionsFrequencyMatrix :
 
     def __init__(

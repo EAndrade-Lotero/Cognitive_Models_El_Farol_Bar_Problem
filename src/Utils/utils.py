@@ -313,7 +313,6 @@ class Fourier :
 		return max(fourier)
 
 
-
 class GetMeasures :
 	
 	def __init__(

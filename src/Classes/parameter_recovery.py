@@ -383,7 +383,6 @@ self.black_box_function = MethodType(def_funct, self)
         exec(function_definition)
 
 
-
 class ParameterFit :
     '''
     Class for fitting the parameters of a model to a given data.
@@ -499,6 +498,16 @@ class ParameterFit :
             return {'discount_factor':(0, 1)}
         if parameter == 'learning_rate':
             return {'learning_rate':(0, 1)}
+        #------------------------------------------
+        # QAttendance
+        #------------------------------------------
+        if parameter == 'go_discount_factor':
+            return {'go_discount_factor':(0, 1)}
+        #------------------------------------------
+        # QFairness
+        #------------------------------------------
+        if parameter == 'fairness_bias':
+            return {'fairness_bias':(0, 1)}
         #------------------------------------------
         # MFP
         #------------------------------------------
