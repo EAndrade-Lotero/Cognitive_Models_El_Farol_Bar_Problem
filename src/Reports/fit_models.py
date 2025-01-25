@@ -12,7 +12,7 @@ from Classes.parameter_recovery import ParameterFit
 data_folder = Path('..', 'data', 'human')
 folder = Path('..', 'reports', 'MLE_2P')
 folder.mkdir(parents=True, exist_ok=True)
-best_fit_file = Path(folder, f'best_fit.json')
+best_fit_file = Path(folder, f'best_fit_all  .json')
 
 # Load data into a dataframe
 file_names = [
