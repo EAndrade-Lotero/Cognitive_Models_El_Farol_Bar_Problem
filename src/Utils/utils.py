@@ -9,100 +9,113 @@ from Classes.agent_utils import TransitionsFrequencyMatrix, ProxyDict
 
 class OrderStrings :
 
-    @staticmethod
-    def order_as_float(list_of_strings: List[str]):
-        some_no_floats = False
-        list_of_floats = list()
-        for x in list_of_strings:
-            try:
-                x = int(x)
-            except:
-                try:
-                    x = float(x)
-                except:
-                    some_no_floats = True
-            list_of_floats.append(x)
-        if not some_no_floats:
-            list_of_floats.sort()
-        list_of_floats = [str(x) for x in list_of_floats]
-        return list_of_floats
-            
+	@staticmethod
+	def order_as_float(list_of_strings: List[str]):
+		some_no_floats = False
+		list_of_floats = list()
+		for x in list_of_strings:
+			try:
+				x = int(x)
+			except:
+				try:
+					x = float(x)
+				except:
+					some_no_floats = True
+			list_of_floats.append(x)
+		if not some_no_floats:
+			list_of_floats.sort()
+		list_of_floats = [str(x) for x in list_of_floats]
+		return list_of_floats
+			
+	@staticmethod
+	def dict_as_numeric(list_of_strings: List[str]):
+		dict_order = {}
+		for x in list_of_strings:
+			try:
+				dict_order[x] = int(x)
+			except:
+				try:
+					dict_order[x] = float(x)
+				except:
+					dict_order[x] = x
+		return dict_order
+
 
 class PPT :
 
-    @staticmethod
-    def get_group_column(columns: List[str]) -> str:
-        if 'id_sim' in columns:
-            return 'id_sim'
-        elif 'room' in columns:
-            return 'room'
-        elif 'group' in columns:
-            return 'group'
-        else:
-            raise Exception(f'Error: No column data found. Should be one of "id_sim", "room", or "group".\nColumns found: {columns}')
+	@staticmethod
+	def get_group_column(columns: List[str]) -> str:
+		if 'id_sim' in columns:
+			return 'id_sim'
+		elif 'room' in columns:
+			return 'room'
+		elif 'group' in columns:
+			return 'group'
+		else:
+			raise Exception(f'Error: No column data found. Should be one of "id_sim", "room", or "group".\nColumns found: {columns}')
 
-    @staticmethod
-    def get_player_column(columns: List[str]) -> str:
-        if 'id_player' in columns:
-            return 'id_player'
-        elif 'player' in columns:
-            return 'player'
-        else:
-            raise Exception(f'Error: No player data found. Should be one of "id_player" or "player".\nColumns found: {columns}')
+	@staticmethod
+	def get_player_column(columns: List[str]) -> str:
+		if 'id_player' in columns:
+			return 'id_player'
+		elif 'player' in columns:
+			return 'player'
+		else:
+			raise Exception(f'Error: No player data found. Should be one of "id_player" or "player".\nColumns found: {columns}')
 
-    @staticmethod
-    def get_num_player_column(columns: List[str]) -> str:
-        if 'num_players' in columns:
-            return 'num_players'
-        elif 'num_agents' in columns:
-            return 'num_agents'
-        else:
-            raise Exception(f'Error: No number of players column found. Should be one of "num_players" or "num_agents".\nColumns found: {columns}')
+	@staticmethod
+	def get_num_player_column(columns: List[str]) -> str:
+		if 'num_players' in columns:
+			return 'num_players'
+		elif 'num_agents' in columns:
+			return 'num_agents'
+		else:
+			raise Exception(f'Error: No number of players column found. Should be one of "num_players" or "num_agents".\nColumns found: {columns}')
 
-    @staticmethod
-    def get_decision_column(columns: List[str]) -> str:
-        if 'decision' in columns:
-            return 'decision'
-        elif 'choice' in columns:
-            return 'choice'
-        else:
-            raise Exception(f'Error: No decision data found. Should be one of "decision" or "choice".\nColumns found: {columns}')
+	@staticmethod
+	def get_decision_column(columns: List[str]) -> str:
+		if 'decision' in columns:
+			return 'decision'
+		elif 'choice' in columns:
+			return 'choice'
+		else:
+			raise Exception(f'Error: No decision data found. Should be one of "decision" or "choice".\nColumns found: {columns}')
 
-    @staticmethod
-    def get_fixed_parameters(data: pd.DataFrame) -> List[int]:
-        assert('threshold' in data.columns)
-        num_players_col = PPT.get_num_player_column(data.columns)
-        pairs = data[[num_players_col, 'threshold']].dropna().values.tolist()
-        pairs = [tuple(x) for x in pairs]
-        pairs = list(set(pairs))
-        list_fixed = list()
-        for num_p, threshold in pairs:
-            fixed_params = {
-                'num_agents': num_p,
-                'threshold': threshold
-            }
-            list_fixed.append(fixed_params)
-        # Run checks
-        for fixed_parameters in list_fixed:
-            num_ag = int(fixed_parameters["num_agents"])
-            threshold = fixed_parameters["threshold"]
-            num_agent_column = PPT.get_num_player_column(data.columns)
-            try:
-                df = data.groupby([num_agent_column, "threshold"]).get_group(tuple([num_ag, threshold]))
-            except Exception as e:
-                print(num_ag, threshold, pairs)
-                raise Exception(e)
-        return list_fixed
+	@staticmethod
+	def get_fixed_parameters(data: pd.DataFrame) -> List[int]:
+		assert('threshold' in data.columns)
+		num_players_col = PPT.get_num_player_column(data.columns)
+		pairs = data[[num_players_col, 'threshold']].dropna().values.tolist()
+		pairs = [tuple(x) for x in pairs]
+		pairs = list(set(pairs))
+		list_fixed = list()
+		for num_p, threshold in pairs:
+			fixed_params = {
+				'num_agents': num_p,
+				'threshold': threshold
+			}
+			list_fixed.append(fixed_params)
+		# Run checks
+		for fixed_parameters in list_fixed:
+			num_ag = int(fixed_parameters["num_agents"])
+			threshold = fixed_parameters["threshold"]
+			num_agent_column = PPT.get_num_player_column(data.columns)
+			try:
+				df = data.groupby([num_agent_column, "threshold"]).get_group(tuple([num_ag, threshold]))
+			except Exception as e:
+				print(num_ag, threshold, pairs)
+				raise Exception(e)
+		return list_fixed
 
 
 class PathUtils :
 		
 	@staticmethod
 	def add_file_name(
-            	path: Path, 
-                file_name: str,
-                extension: str
-            ) -> Path:
+				path: Path, 
+				file_name: str,
+				extension: str
+			) -> Path:
 		file = Path.joinpath(path, f'{file_name}.{extension}')
 		counter = 0
 		while file.exists():
@@ -159,9 +172,9 @@ class ConditionalEntropy :
 		# Create a proxy dictionary
 		all_states = list(product([0,1], repeat=num_agents))
 		tm = ProxyDict(
-               keys=all_states,
-               initial_val=0
-        )
+			keys=all_states,
+			initial_val=0
+		)
 		for state in states:
 			tm.increment(state)
 		return tm
@@ -223,9 +236,9 @@ class ConditionalEntropy :
 		df_transitions['transition'] = df_transitions[['state', 'next_state']].apply(lambda x: tuple((tuple(x['state']), tuple(x['next_state']))), axis=1)
 		# Create Transition frequency matrix
 		tm = TransitionsFrequencyMatrix(
-               num_agents=num_agents,
-               uniform=False
-        )
+			num_agents=num_agents,
+			uniform=False
+		)
 		for transition in df_transitions['transition'].values:
 			tm.increment(transition)
 		return tm
@@ -318,7 +331,7 @@ class GetMeasures :
 	def __init__(
 				self,
 				data: pd.DataFrame,
-                measures: List[str],
+				measures: List[str],
 				normalize: Optional[bool]=False,
 				T: Optional[int]=20,
 				per_player: Optional[bool]=False

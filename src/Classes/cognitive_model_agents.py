@@ -211,7 +211,7 @@ class CogMod () :
 
 class Random(CogMod) :
 	'''
-	Implements a random rule of go/no go with equal probability.
+	Implements a random rule of go/no go with probability given by go_prob.
 	'''
 	def __init__(
 				self, 
@@ -238,7 +238,8 @@ class Random(CogMod) :
 		Output:
 			- A decision 0 or 1
 		'''
-		return 1 if uniform(0, 1) < self.go_prob else 0
+		go_prob = self.go_probability()
+		return 1 if uniform(0, 1) < go_prob else 0
 	
 	def go_probability(self):
 		'''
@@ -329,94 +330,10 @@ class WSLS(CogMod) :
 		return 'WSLS'
 
 
-class PayoffRescorlaWagner(CogMod) :
+class PayoffM1(CogMod) :
 	'''
-	Defines the model of reinforcement learning that estimates
-	actions payoffs using the Rescorla Wagner rule.
-	'''
-
-	def __init__(
-				self, 
-				free_parameters:Optional[Dict[str,any]]={}, 
-				fixed_parameters:Optional[Dict[str,any]]={}, 
-				n:Optional[int]=1
-			) -> None:
-		#----------------------
-		# Initialize superclass
-		#----------------------
-		super().__init__(
-			free_parameters=free_parameters, 
-			fixed_parameters=fixed_parameters, 
-			n=n
-		)
-		#----------------------
-		# Bookkeeping for model parameters
-		#----------------------
-		self.reward_go = free_parameters["initial_reward_estimate_go"]
-		self.reward_no_go = free_parameters["initial_reward_estimate_no_go"]
-		self.learning_rate = free_parameters["learning_rate"]
-		#----------------------
-		# Bookkeeping for go preference
-		#----------------------
-		self.action_preferences = [
-			self.reward_no_go, 
-			self.reward_go
-		]
-
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
-		'''
-		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
-		Output:
-			- List with no go preference followed by go preference
-		'''
-		# Return preferences
-		return self.action_preferences
-	
-	def update(self, score:int, obs_state:tuple) -> None:
-		'''
-		Agent updates its model.
-		Input:
-			- score, a number 0 or 1.
-			- obs_state, a tuple with the sate of current round,
-						where each argument is 0 or 1.
-		'''
-		# Agent learns
-		action = obs_state[self.number]
-		delta = score - self.action_preferences[action]
-		if self.debug:
-			print('Learning rule:')
-			print(f'Q[{action}] <- {self.action_preferences[action]} + {self.learning_rate} * ({score} - {self.action_preferences[action]})')
-		self.action_preferences[action] += self.learning_rate * delta
-		if self.debug:
-			print(f'Q[{action}] <- {self.action_preferences[action]}\n')
-		# Update records
-		self.scores.append(score)
-		self.decisions.append(action)
-		self.prev_state_ = obs_state
-	
-	def __str__(self) -> str:
-		table = PrettyTable()
-		table.field_names = ['Agent', self.number]
-		table.add_row(['reward_go', self.action_preferences[1]])
-		table.add_row(['reward_no_go', self.action_preferences[0]])
-		table.add_row(['learning_rate', self.learning_rate])
-		table.add_row(['inverse_temperature', self.inverse_temperature])
-		return str(table)
-
-	@staticmethod
-	def name():
-		return 'PRW'
-
-
-class AttendanceRescorlaWagner(CogMod) :
-	'''
-	Defines the model of reinforcement learning that estimates
-	bar's free space using the Rescorla Wagner rule.
+	Defines the error-driven learning rule based on payoffs.
+	This is the unconditioned model.
 	'''
 
 	def __init__(
@@ -436,15 +353,12 @@ class AttendanceRescorlaWagner(CogMod) :
 		#----------------------
 		# Bookkeeping for model parameters
 		#----------------------
-		self.luft_estimate = free_parameters["initial_luft_estimate"]
 		self.learning_rate = free_parameters["learning_rate"]
 		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
-		self.action_preferences = [
-			0.5, 
-			self.luft_estimate
-		]
+		self.backup_Q = np.zeros(2)
+		self.Q = deepcopy(self.backup_Q)
 
 	def determine_action_preferences(
 				self,
@@ -457,10 +371,16 @@ class AttendanceRescorlaWagner(CogMod) :
 		Output:
 			- List with no go preference followed by go preference
 		'''
-		self.action_preferences = [0, self.luft_estimate]
-		return self.action_preferences
+		if previous_state is None:
+			return [0, 0]
+		else:
+			return self.Q
 
-	def update(self, score:int, obs_state:tuple):
+	def update(
+				self, 
+				score: int, 
+				obs_state: Tuple[int]
+			) -> None:
 		'''
 		Agent updates its model.
 		Input:
@@ -468,31 +388,59 @@ class AttendanceRescorlaWagner(CogMod) :
 			- obs_state_, a tuple with the sate of current round,
 						where each argument is 0 or 1.
 		'''
-		# Agent learns
 		action = obs_state[self.number]
-		attendance_without_myself = sum(obs_state) - action
-		available_space = self.threshold * self.num_agents - attendance_without_myself
-		delta = available_space - self.luft_estimate
-		if self.debug:
-			print('Learning rule:')
-			print(f'Q_k+1 <- {self.luft_estimate} + {self.learning_rate} * ({available_space} - {self.luft_estimate})')
-		self.luft_estimate += self.learning_rate * delta
-		if self.debug:
-			print(f'Q_k+1 <- {self.luft_estimate}\n')
+		if self.prev_state_ is not None:
+			# Agent learns
+			self.learn(obs_state)
 		# Update records
 		self.scores.append(score)
 		self.decisions.append(action)
 		self.prev_state_ = obs_state
 
+	def learn(
+				self,
+				obs_state: Tuple[int],
+			) -> None:
+		'''
+		Agent updates their action preferences
+		Input:
+			- obs_state_, a tuple with the sate of current round,
+						where each argument is 0 or 1.
+		'''
+		# Get action
+		action = obs_state[self.number]
+		# Observe G
+		G = self._get_G(obs_state)
+		# Determine error prediction
+		delta = G - self.Q[action]
+		# Update Q table
+		if self.debug:
+			print('Learning rule:')
+			print(f'Q[{action}] <- {self.Q[action]} + {self.learning_rate} * ({G} - {self.Q[action]})')
+		self.Q[action] += self.learning_rate * delta
+		if self.debug:
+			print(f'Q[{action}] = {self.Q[action]}')
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		G = self.payoff(action, obs_state)
+		if self.debug:
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	def reset(self) -> None:
+		super().reset()
+		self.Q = deepcopy(self.backup_Q)
+
 	@staticmethod
 	def name():
-		return 'ARW'
+		return 'Payoff-M1'
 
 
-class Q_learning(CogMod) :
+class PayoffM2(PayoffM1) :
 	'''
-	Defines the model of reinforcement learning that estimates
-	long term actions payoffs using the q_learning rule.
+	Defines the error-driven learning rule based on payoffs.
+	This model conditions G on the previous action and aggregate state.
 	'''
 
 	def __init__(
@@ -513,19 +461,107 @@ class Q_learning(CogMod) :
 		# Bookkeeping for model parameters
 		#----------------------
 		self.learning_rate = free_parameters["learning_rate"]
-		self.discount_factor = free_parameters["discount_factor"]
-		go_drive = free_parameters["go_drive"]
 		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
-		# Q = parameters["Q"]
-		# assert(isinstance(Q, np.ndarray))
-		# expected_num_rows = 2 ** self.num_agents
-		# expected_num_cols = 2
-		# assert(Q.shape == (expected_num_rows, expected_num_cols)), f'Error: Q.shape is {Q.shape} but should be ({expected_num_rows}, {expected_num_cols})'
-		self.backup_Q = np.zeros((2 ** self.num_agents, 2))
-		self.backup_Q[:,1] = go_drive
-		self.backup_Q[:,0] = 0
+		self.backup_Q = np.zeros((2, self.num_agents, 2))
+		self.Q = deepcopy(self.backup_Q)
+
+	def determine_action_preferences(
+				self,
+				previous_state: List[int]
+			) -> List[float]:
+		'''
+		Agent determines their preferences to go to the bar or not.
+		Input:
+			- state, list of decisions of all agents
+		Output:
+			- List with no go preference followed by go preference
+		'''
+		if previous_state is None:
+			return [0, 0]
+		else:
+			prev_action, attendance = self._get_index(previous_state)
+			return self.Q[prev_action, attendance, :]
+
+	def learn(
+				self,
+				obs_state: Tuple[int],
+			) -> None:
+		'''
+		Agent updates their action preferences
+		Input:
+			- action, go = 1 or no_go = 0
+			- previous_state, list of decisions on previous round
+			- new_state, list of decisions obtained after decisions
+		'''
+		# Get previous state
+		previous_state = self.prev_state_
+		# Get action
+		action = obs_state[self.number]
+		# Observe G 
+		G = self._get_G(obs_state)
+		# Determine error prediction
+		prev_action, attendance = self._get_index(previous_state)
+		delta = G - self.Q[prev_action, attendance, action]
+		# Update Q table
+		if self.debug:
+			print('Learning rule:')
+			print(f'Q[({prev_action}, {attendance}), {action}] <- {self.Q[prev_action, attendance, action]} + {self.learning_rate} * ({G} - {self.Q[prev_action, attendance, action]})')
+		self.Q[prev_action, attendance, action] += self.learning_rate * delta
+		if self.debug:
+			print(f'Q[({prev_action}, {attendance}), {action}] = {self.Q[prev_action, attendance, action]}')
+
+	def _get_index(self, state: List[int]) -> int:
+		'''
+		Determines the index of a state in a Q table
+		Input:
+			- state, list of decisions
+		Output:
+			- tuple, integers corresponding to the action and attendance
+		'''
+		if isinstance(state, dict):
+			state_ = list(state.values())
+		else:
+			state_ = state
+		action = state_[self.number]
+		attendance_others = np.sum(state_) - action
+		# Return index
+		return action, attendance_others
+	
+	@staticmethod
+	def name():
+		return 'Payoff-M2'
+	
+
+class PayoffM3(PayoffM1) :
+	'''
+	Defines the error-driven learning rule based on payoffs.
+	This model conditions G on the previous actions vector, the full-state.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		#----------------------
+		# Bookkeeping for model parameters
+		#----------------------
+		self.learning_rate = free_parameters["learning_rate"]
+		#----------------------
+		# Bookkeeping for go preference
+		#----------------------
+		self.backup_Q = np.zeros(self.num_agents, 2)
 		self.Q = deepcopy(self.backup_Q)
 
 	def determine_action_preferences(
@@ -545,32 +581,9 @@ class Q_learning(CogMod) :
 			index_previous_state = self._get_index(previous_state)
 			return self.Q[index_previous_state, :]
 
-	def update(self, score:int, obs_state:tuple):
-		'''
-		Agent updates its model.
-		Input:
-			- score, a number 0 or 1.
-			- obs_state_, a tuple with the sate of current round,
-						where each argument is 0 or 1.
-		'''
-		action = obs_state[self.number]
-		if self.prev_state_ is not None:
-			# Agent learns
-			self.learn(
-				action=action,
-				payoff=score,
-				new_state=obs_state
-			)
-		# Update records
-		self.scores.append(score)
-		self.decisions.append(action)
-		self.prev_state_ = obs_state
-
 	def learn(
 				self,
-				action: int,
-				payoff: float,
-				new_state: List[int]
+				action: int
 			) -> None:
 		'''
 		Agent updates their action preferences
@@ -581,10 +594,8 @@ class Q_learning(CogMod) :
 		'''
 		# Get previous state
 		previous_state = self.prev_state_
-		# Bootstrap max expected long term reward
-		max_bootstrap = self.maxQ(new_state)
-		# Estimage long term reward for state-action pair
-		G = payoff + self.discount_factor * max_bootstrap
+		# Observe G 
+		G = self._get_G(action)
 		# Determine error prediction
 		index_previous_state = self._get_index(previous_state)
 		delta = G - self.Q[index_previous_state, action]
@@ -595,18 +606,6 @@ class Q_learning(CogMod) :
 		self.Q[index_previous_state, action] += self.learning_rate * delta
 		if self.debug:
 			print(f'Q[{previous_state},{action}] = {self.Q[index_previous_state, action]}')
-
-	def maxQ(self, state: List[int]) -> float:
-		'''
-		Determines the max over actions of the estimated long term reward given a state
-		Input:
-			- state, list of decisions
-		Output:
-			- maximum of the estimated long term rewards
-		'''
-		state_index = self._get_index(state)
-		estimated_rewards = self.Q[state_index, :]
-		return max(estimated_rewards)
 
 	def _get_index(self, state: List[int]) -> int:
 		'''
@@ -627,19 +626,16 @@ class Q_learning(CogMod) :
 		# Return index
 		return index
 	
-	def reset(self) -> None:
-		super().reset()
-		self.Q = deepcopy(self.backup_Q)
-
 	@staticmethod
 	def name():
-		return 'Qlearning'
+		return 'Payoff-M3'
 
 
-class QAttendance(Q_learning) :
+class AvailableSpaceM1(PayoffM1) :
 	'''
-	Defines the model of reinforcement learning that estimates
-	long term actions payoffs using the q_learning rule.
+	Defines the error-driven learning rule based on 
+	available space in the bar.
+	This is the unconditioned model.
 	'''
 
 	def __init__(
@@ -656,77 +652,28 @@ class QAttendance(Q_learning) :
 			fixed_parameters=fixed_parameters, 
 			n=n
 		)
-		#----------------------
-		# Bookkeeping for model parameters
-		#----------------------
-		self.learning_rate = free_parameters["learning_rate"]
-		self.discount_factor = free_parameters["discount_factor"]
-		self.go_discount_factor = free_parameters["go_discount_factor"]
-		self.go_drive = free_parameters["go_drive"]
-		#----------------------
-		# Bookkeeping for go preference
-		#----------------------
-		# Q = parameters["Q"]
-		# assert(isinstance(Q, np.ndarray))
-		# expected_num_rows = 2 ** self.num_agents
-		# expected_num_cols = 2
-		# assert(Q.shape == (expected_num_rows, expected_num_cols)), f'Error: Q.shape is {Q.shape} but should be ({expected_num_rows}, {expected_num_cols})'
-		self.backup_Q = np.zeros((2 ** self.num_agents, 2))
-		self.backup_Q[:,1] = self.go_drive
-		self.backup_Q[:,0] = 0
-		self.Q = deepcopy(self.backup_Q)
 
-	def learn(
-				self,
-				action: int,
-				payoff: float,
-				new_state: List[int]
-			) -> None:
-		'''
-		Agent updates their action preferences
-		Reward signal contains average go frequency
-		Input:
-			- action, go = 1 or no_go = 0
-			- previous_state, list of decisions on previous round
-			- new_state, list of decisions obtained after decisions
-		'''
-		# Get previous state
-		previous_state = self.prev_state_
-		# Get discounted go frequency
-		reversed_actions = [action] + self.decisions[::-1]
-		discounted_actions = [self.go_discount_factor**(i+1) * x  for i, x in enumerate(reversed_actions)]
-		average_go = sum(discounted_actions)
-		# Bootstrap max expected long term reward
-		max_bootstrap = self.maxQ(new_state)
-		# Estimage long term reward for state-action pair
-		long_term_reward = payoff + self.discount_factor * max_bootstrap
-		# Update
-		G = average_go + long_term_reward
-		# Determine error prediction
-		index_previous_state = self._get_index(previous_state)
-		delta = G - self.Q[index_previous_state, action]
-		# Update Q table
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get previous attendance
+		previous_attendance = np.sum(self.prev_state_)
+		G = self.threshold * self.num_agents - previous_attendance
 		if self.debug:
-			print(f'Discounted actions: {discounted_actions}')
-			print(f'Discounted average go frequency: {average_go}')
-			print(f'Reward: {payoff}')
-			print(f'Estimated long term reward: {long_term_reward}')
-			print(f'Reward with average go frequency: {G}')
-			print('Learning rule:')
-			print(f'Q[{previous_state},{action}] <- {self.Q[index_previous_state, action]} + {self.learning_rate} * ({G} - {self.Q[index_previous_state, action]})')
-		self.Q[index_previous_state, action] += self.learning_rate * delta
-		if self.debug:
-			print(f'Q[{previous_state},{action}] = {self.Q[index_previous_state, action]}')
+			print(f'Previous attendance: {previous_attendance}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
 
 	@staticmethod
 	def name():
-		return 'QAttendance'
+		return 'AvailableSpace-M1'
 
 
-class QFairness(Q_learning) :
+class AvailableSpaceM2(PayoffM2) :
 	'''
-	Defines the model of reinforcement learning that estimates
-	long term actions payoffs using the q_learning rule.
+	Defines the error-driven learning rule based on 
+	available space in the bar.
+	This model conditions G on the previous action 
+	and aggregate state.
 	'''
 
 	def __init__(
@@ -743,76 +690,27 @@ class QFairness(Q_learning) :
 			fixed_parameters=fixed_parameters, 
 			n=n
 		)
-		#----------------------
-		# Bookkeeping for model parameters
-		#----------------------
-		self.learning_rate = free_parameters["learning_rate"]
-		self.discount_factor = free_parameters["discount_factor"]
-		self.fairness_bias = free_parameters["fairness_bias"]
-		self.go_drive = free_parameters["go_drive"]
-		#----------------------
-		# Bookkeeping for go preference
-		#----------------------
-		# Q = parameters["Q"]
-		# assert(isinstance(Q, np.ndarray))
-		# expected_num_rows = 2 ** self.num_agents
-		# expected_num_cols = 2
-		# assert(Q.shape == (expected_num_rows, expected_num_cols)), f'Error: Q.shape is {Q.shape} but should be ({expected_num_rows}, {expected_num_cols})'
-		self.backup_Q = np.zeros((2 ** self.num_agents, 2))
-		self.backup_Q[:,1] = self.go_drive
-		self.backup_Q[:,0] = 0
-		self.Q = deepcopy(self.backup_Q)
 
-	def learn(
-				self,
-				action: int,
-				payoff: float,
-				new_state: List[int]
-			) -> None:
-		'''
-		Agent updates their action preferences
-		Reward signal contains fair go average
-		Input:
-			- action, go = 1 or no_go = 0
-			- previous_state, list of decisions on previous round
-			- new_state, list of decisions obtained after decisions
-		'''
-		# Get previous state
-		previous_state = self.prev_state_
-		# Get average go frequency
-		average_go = np.mean(self.decisions + [action])
-		# Get difference with fair number of go times 
-		fair_go = (self.threshold - average_go) * (2 * action - 1)
-		# Bootstrap max expected long term reward
-		max_bootstrap = self.maxQ(new_state)
-		# Estimage long term reward for state-action pair
-		long_term_reward = payoff + self.discount_factor * max_bootstrap
-		# Update
-		G = self.fairness_bias * fair_go + (1 - self.fairness_bias) * long_term_reward
-		# Determine error prediction
-		index_previous_state = self._get_index(previous_state)
-		delta = G - self.Q[index_previous_state, action]
-		# Update Q table
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get previous attendance
+		previous_attendance = np.sum(self.prev_state_)
+		G = self.threshold * self.num_agents - previous_attendance
 		if self.debug:
-			print(f'Average go frequency: {average_go} --- {self.decisions + [action]}')
-			print(f'Go fairness: {fair_go}')
-			print(f'Reward: {payoff}')
-			print(f'Estimated long term reward: {long_term_reward}')
-			print(f'Reward with go fairness: {G}')
-			print('Learning rule:')
-			print(f'Q[{previous_state},{action}] <- {self.Q[index_previous_state, action]} + {self.learning_rate} * ({G} - {self.Q[index_previous_state, action]})')
-		self.Q[index_previous_state, action] += self.learning_rate * delta
-		if self.debug:
-			print(f'Q[{previous_state},{action}] = {self.Q[index_previous_state, action]}')
+			print(f'Previous attendance: {previous_attendance}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
 
 	@staticmethod
 	def name():
-		return 'QFairness'
+		return 'AvailableSpace-M2'
 
 
-class MFP(CogMod) :
+class AvailableSpaceM3(PayoffM3) :
 	'''
-	Implements an agent using the Markov Fictitious Play learning rule for multiple players.
+	Defines the error-driven learning rule based on 
+	available space in the bar.
+	This model conditions G on the previous actions vector, the full-state.
 	'''
 
 	def __init__(
@@ -829,30 +727,326 @@ class MFP(CogMod) :
 			fixed_parameters=fixed_parameters, 
 			n=n
 		)
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get previous attendance
+		previous_attendance = np.sum(self.prev_state_)
+		G = self.threshold * self.num_agents - previous_attendance
+		if self.debug:
+			print(f'Previous attendance: {previous_attendance}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	@staticmethod
+	def name():
+		return 'AvailableSpace-M3'
+
+
+
+class AttendanceM1(PayoffM1) :
+	'''
+	Defines the error-driven learning rule based on 
+	weighted combination of average go and payoff.
+	This is the unconditioned model.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
 		#----------------------
-		# Bookkeeping free parameters
+		# Initialize superclass
 		#----------------------
-		self.belief_strength = free_parameters["belief_strength"]
-		self.go_drive = free_parameters["go_drive"]
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.bias = free_parameters['bias']
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get go frequency
+		average_go = np.mean(self.decisions)
+		# Get payoff
+		payoff = self.payoff(action, obs_state)
+		G = self.bias * average_go + (1 - self.bias) * payoff
+		if self.debug:
+			print(f'Average go: {average_go}')
+			print(f'Payoff: {payoff}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	@staticmethod
+	def name():
+		return 'Attendance-M1'
+
+
+class AttendanceM2(PayoffM2) :
+	'''
+	Defines the error-driven learning rule based on 
+	weighted combination of average go and payoff.
+	This model conditions G on the previous action 
+	and aggregate state.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
 		#----------------------
-		# Bookkeeping fixed parameters
+		# Initialize superclass
 		#----------------------
-		self.states = fixed_parameters['states']
-		self.count_states = fixed_parameters['count_states']
-		self.count_transitions = fixed_parameters['count_transitions']
-		self.designated_agent = fixed_parameters['designated_agent']
-		self.list_partners = list(product([0,1], repeat = self.num_agents-1))
-		self.number = n
-		self.prev_state_ = None
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.bias = free_parameters['bias']
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get go frequency
+		average_go = np.mean(self.decisions)
+		# Get payoff
+		payoff = self.payoff(action, obs_state)
+		G = self.bias * average_go + (1 - self.bias) * payoff
+		if self.debug:
+			print(f'Average go: {average_go}')
+			print(f'Payoff: {payoff}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	@staticmethod
+	def name():
+		return 'Attendance-M2'
+
+
+class AttendanceM3(PayoffM3) :
+	'''
+	Defines the error-driven learning rule based on weighted 
+	combination of average go and payoff.
+	This model conditions G on the previous actions vector, the full-state.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
 		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.bias = free_parameters['bias']
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get go frequency
+		average_go = np.mean(self.decisions)
+		# Get payoff
+		payoff = self.payoff(action, obs_state)
+		G = self.bias * average_go + (1 - self.bias) * payoff
+		if self.debug:
+			print(f'Average go: {average_go}')
+			print(f'Payoff: {payoff}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	@staticmethod
+	def name():
+		return 'Attendance-M3'
+
+
+class FairnessM1(PayoffM1) :
+	'''
+	Defines the error-driven learning rule based 
+	on weighted combination of fair amount of go
+	and payoff.
+	This is the unconditioned model.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.bias = free_parameters['bias']
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get go frequency
+		average_fairness = self.threshold - np.mean(self.decisions)
+		# Get payoff
+		payoff = self.payoff(action, obs_state)
+		G = self.bias * average_fairness + (1 - self.bias) * payoff
+		if self.debug:
+			print(f'Average fairness: {average_fairness}')
+			print(f'Payoff: {payoff}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	@staticmethod
+	def name():
+		return 'Fairness-M2'
+
+
+class FairnessM2(PayoffM2) :
+	'''
+	Defines the error-driven learning rule based 
+	on weighted combination of fair amount of go
+	and payoff.
+	This model conditions G on the previous action 
+	and aggregate state.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.bias = free_parameters['bias']
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get go frequency
+		average_fairness = self.threshold - np.mean(self.decisions)
+		# Get payoff
+		payoff = self.payoff(action, obs_state)
+		G = self.bias * average_fairness + (1 - self.bias) * payoff
+		if self.debug:
+			print(f'Average fairness: {average_fairness}')
+			print(f'Payoff: {payoff}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	@staticmethod
+	def name():
+		return 'Fairness-M1'
+	
+
+class FairnessM3(PayoffM3) :
+	'''
+	Defines the error-driven learning rule based 
+	on weighted combination of fair amount of go
+	and payoff.
+	This model conditions G on the previous actions vector, the full-state.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.bias = free_parameters['bias']
+
+	def _get_G(self, obs_state: Tuple[int]) -> float:
+		action = obs_state[self.number]
+		# Get go frequency
+		average_fairness = self.threshold - np.mean(self.decisions)
+		# Get payoff
+		payoff = self.payoff(action, obs_state)
+		G = self.bias * average_fairness + (1 - self.bias) * payoff
+		if self.debug:
+			print(f'Average fairness: {average_fairness}')
+			print(f'Payoff: {payoff}')
+			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+		return G
+
+	@staticmethod
+	def name():
+		return 'Fairness-M3'
+	
+
+class MFPM2(CogMod) :
+	'''
+	Implements an agent using the Markov Fictitious Play learning rule 
+	for multiple players.
+	This model conditions G on the previous actions vector, the full-state.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		#--------------------------------------------
+		# Create counters
+		#--------------------------------------------
+		self.states = list(product([0, 1], np.arange(self.num_agents)))
+		self.count_states = ProxyDict(keys=self.states, initial_val=0)
+		self.count_transitions = ProxyDict(
+			keys=list(product(self.states, np.arange(self.num_agents + 1))),
+			initial_val=0
+		)
+		#--------------------------------------------
 		# Create transition probabilities
-		#----------------------		
-		self.alphas = self.create_alphas()
+		#--------------------------------------------
 		self.trans_probs = ProxyDict(
-			keys=list(product(self.states, repeat=2)),
-			initial_val=1
+			keys=list(product(self.states, np.arange(self.num_agents + 1))),
+			initial_val=self._get_scaling_factor()
 		)
-		self.trans_probs.from_dict(self.alphas)
+
+	def _get_scaling_factor(self) -> None:
+		scaling_factor = 1 / 2
+		return scaling_factor
+
+	def _get_observed_transition(
+				self, 
+				obs_state:Tuple[int]
+			) -> Tuple[Tuple[int, int], int]:
+		action = obs_state[self.number]
+		others_attendance = sum(self.prev_state_) - action
+		prev_state = (action, others_attendance)
+		attendance = sum(obs_state)
+		observed_transition = (prev_state, attendance)
+		return observed_transition		
 
 	def determine_action_preferences(
 				self,
@@ -871,9 +1065,31 @@ class MFP(CogMod) :
 			print(f'no go:{eus[0]} ---- go:{eus[1]}')
 		return eus
 	
+	def exp_util(self, prev_state, action):
+		'''
+		Evaluates the expected utility of an action.
+		Input:
+			- prev_state, a tuple with the state of the previous round, 
+						where each argument is 0 or 1.
+			- action, which is a possible decision 0 or 1.
+		Output:
+			- The expected utility (float).
+		'''
+		if action == 0:
+			return 0
+		else:
+			bar_with_capacity = [n for n in range(self.num_agents) if n <= self.threshold * self.num_agents]
+			bar_crowded = [n for n in range(self.num_agents) if n > self.threshold * self.num_agents]
+			prob_capacity = sum([self.trans_probs((tuple(prev_state), n)) for n in bar_with_capacity])
+			prob_crowded = sum([self.trans_probs((tuple(prev_state), n)) for n in bar_crowded])
+			eu = prob_capacity - prob_crowded
+			if self.debug:
+				print(f'{prob_capacity=} --- {prob_crowded=}')
+		return eu
+
 	def update(self, score:int, obs_state:Tuple[int]):
 		'''
-		Agent updates its model using the Markov Fictitious Play rule.
+		Agent updates its model using the observed frequencies.
 		Input:
 			- score, a number 0 or 1.
 			- obs_state_, a tuple with the sate of current round,
@@ -885,26 +1101,37 @@ class MFP(CogMod) :
 		# Update records
 		self.scores.append(score)
 		self.decisions.append(obs_state[self.number])
-		if self.designated_agent:
-			# Agent recalls previous state?
-			if self.prev_state_ is not None:
-				prev_state = self.prev_state_
-				# Update transtion counts
-				observed_transition = (prev_state, obs_state)
-				self.count_transitions.increment(observed_transition)
-				# Loop over states and update transition probabilities
-				for new_state in self.states:
-					transition = (prev_state, new_state)
-					numerator = self.count_transitions(transition) + self.belief_strength * self.alphas[transition]
-					denominator = self.count_states(tuple(prev_state)) + self.belief_strength
-					new_prob = numerator / denominator
-					assert(0 <= new_prob <= 1), f'Error: Improper probability value {new_prob}.\nTransition:{transition}\nTransition counts:{self.count_transitions(transition)}\nPrev. state counts:{self.count_states(tuple(prev_state))}'
-					# print(f'agente {self.number} --- transición {prev_state}=>{new_state} --- pasa de {round(self.trans_probs(transition))} a {round(new_prob,2)}')
-					self.trans_probs.update(transition, new_prob)
-			# Update state counts
-			self.count_states.increment(obs_state)
+		# Agent recalls previous state?
+		if self.prev_state_ is not None:
+			observed_transition = self._get_observed_transition(obs_state)
+			prev_state = observed_transition[0]
+			# Update transtion counts
+			self.count_transitions.increment(observed_transition)
+			# Loop over states and update transition probabilities
+			for new_state in self.states:
+				transition = (prev_state, new_state)
+				numerator = self.count_transitions(transition) + 1
+				denominator = self.count_states(tuple(prev_state)) + self.num_agents + 1
+				new_prob = numerator / denominator
+				assert(0 <= new_prob <= 1), self._get_error_message(new_prob, transition, prev_state)
+				# print(f'agente {self.number} --- transición {prev_state}=>{new_state} --- pasa de {round(self.trans_probs(transition))} a {round(new_prob,2)}')
+				self.trans_probs.update(transition, new_prob)
+		# Update state counts
+		self.count_states.increment(obs_state)
 		# Update previous state
 		self.prev_state_ = obs_state
+
+	def _get_error_message(
+				self, 
+				new_prob: float, 
+				transition: Dict[any, any], 
+				prev_state: Tuple[int]
+			) -> str:
+		error_message = f'Error: Improper probability value {new_prob}.\n'
+		error_message += f'Transition:{transition}\n'
+		error_message += f'Transition counts:{self.count_transitions(transition)}\n'
+		error_message += f'Prev. state counts:{self.count_states(tuple(prev_state))}'
+		return error_message	
 
 	def reset(self) :
 		'''
@@ -912,33 +1139,16 @@ class MFP(CogMod) :
 		'''
 		super().reset()
 		self.prev_state_ = None
-		if self.designated_agent:
-			self.count_states.reset()
-			self.count_transitions.reset()
-			self.trans_probs.from_dict(self.alphas)
-	
-	def exp_util(self, prev_state, action):
-		'''
-		Evaluates the expected utility of an action.
-		Input:
-			- prev_state, a tuple with the state of the previous round, 
-						where each argument is 0 or 1.
-			- action, which is a possible decision 0 or 1.
-		Output:
-			- The expected utility (float).
-		'''
-		eu = 0
-		# print(f'prev_state:{prev_state} ---- accion:{action}')
-		for partners in self.list_partners:
-			state = list(partners)
-			state.insert(self.number, action)
-			v = self.payoff(action, state)
-			p = self.trans_probs((tuple(prev_state), tuple(state)))
-			# p = self.trans_probs[(prev_state, tuple(state))]
-			# print(f'state:{state} ---- utilidad:{v} --- probabilidad:{p}')
-			eu += v*p
-		return eu
-	
+		self.count_states = ProxyDict(keys=self.states, initial_val=0)
+		self.count_transitions = ProxyDict(
+			keys=list(product(self.states, np.arange(self.num_agents + 1))),
+			initial_val=0
+		)
+		self.trans_probs = ProxyDict(
+			keys=list(product(self.states, np.arange(self.num_agents + 1))),
+			initial_val=self._get_scaling_factor()
+		)
+		
 	def print_agent(self, ronda:int=None) -> str:
 		'''
 		Returns a string with the state of the agent on a given round.
@@ -960,57 +1170,23 @@ class MFP(CogMod) :
 			score = self.scores[ronda]
 		except:
 			score = "nan"
-		print(f"No.agent:{self.number}, Decision:{decision}, Score:{score}, Lambda:{self.belief_strength}, Go_d:{self.go_drive}")
+		print(f"No.agent:{self.number}, Decision:{decision}, Score:{score}")
 		tp = TransitionsFrequencyMatrix(num_agents=self.num_agents)
 		tp.from_proxydict(self.trans_probs)
 		print(tp)
-
-	def create_alphas(self) -> None:
-
-		def get_drive(y: List[int]) -> float:
-			if y[self.number] == 1 and sum(y) <= self.threshold * self.num_agents:
-				return self.go_drive
-			else:
-				return 0
-			
-		def get_combinatorial_tuples(B: int) -> int:
-			aux = 0
-			for i in range(B + 1):
-				aux += comb(self.num_agents -1, i)
-			return aux
-
-		combinatorial_tuples = get_combinatorial_tuples(int(self.threshold * self.num_agents - 1))
-		# print(f'combinatorial_tuples: ({self.num_agents - 1},{int(self.threshold * self.num_agents - 1)}) = {combinatorial_tuples}')
-		scalling_factor = 2 ** self.num_agents + combinatorial_tuples * self.go_drive
-		# print(f'scalling_factor: 2^{self.num_agents} + {combinatorial_tuples}*{self.go_drive} = {scalling_factor}')
-		# y = list(self.states[0])
-		# y[self.number] = 1
-		# print(f'Numerator with drive:', 1 + get_drive(y))
-		# wdtg = (1 + get_drive(y)) / scalling_factor
-		# print('With drive to go:', wdtg)
-		# print('Without drive to go:', 1 / scalling_factor)
-		alphas = {(x,y):(1 + get_drive(y))/scalling_factor for x in self.states for y in self.states}
-		# x = self.states[0]
-		# values_alphas = [alphas[(x,y)] for y in self.states]
-		# print('Number of columns:', len(values_alphas))
-		# values_alphas_wdtg = [v for v in values_alphas if v == wdtg]
-		# print('Number of values with drive to go:', len(values_alphas_wdtg))
-		# print('alphas:')
-		# print(alphas)
-		for x in self.states:
-			check_list = [alphas[(x, y)] for y in self.states]
-			# print('check_list:', check_list)
-			# print('sum:', sum(check_list))
-			assert(np.isclose(sum(check_list), 1))
-		return alphas
 	
 	@staticmethod
 	def name():
-		return 'MFP'
+		return 'MFP-M2'
 
 
-class MFPAgg(CogMod):
-		
+class MFPM3(MFPM2) :
+	'''
+	Implements an agent using the Markov Fictitious Play learning rule 
+	for multiple players.
+	This model conditions G on the previous actions vector, the full-state.
+	'''
+
 	def __init__(
 				self, 
 				free_parameters:Optional[Dict[str,any]]={}, 
@@ -1025,171 +1201,78 @@ class MFPAgg(CogMod):
 			fixed_parameters=fixed_parameters, 
 			n=n
 		)
-		#----------------------
-		# Bookkeeping free parameters
-		#----------------------
-		self.belief_strength = free_parameters["belief_strength"]
-		self.go_drive = free_parameters["go_drive"]
-		#----------------------
-		# Bookkeeping important variables
-		#----------------------
-		# states: (a, b) where:
-		#		 a == 1 the agent goes; a == 0 the agent doesn't go
-		#		 b == 1 no seats available for agent; b == 0 at least one seat available
-		self.states = [(a,b) for a in range(2) for b in range(2)]
-		self.count_states = {state:0 for state in self.states}
-		self.count_transitions = {(prev_s,new_s):0 for prev_s in self.states for new_s in self.states}
-		self.payoff_matrix = np.matrix([[0, 0], [1, -1]])
-		self.prev_state_ = None
-		#----------------------
-		# Create transition probabilities
-		#----------------------		
-		self.alphas = self.create_alphas()
-		self.trans_probs = deepcopy(self.alphas)
+		self.states = list(product([0, 1], repeat=self.num_agents))
+		self.reset()
 
-	def update(self, score:int, obs_state:List[int]):
-		'''
-		Agent updates its model using the Markov Fictitious Play rule.
-		Input:
-			- score, a number 0 or 1.
-			- obs_state, a tuple with the sate of current round,
-						 where each argument is 0 or 1.
-		Input:
-		'''
-		# Update records
-		self.scores.append(score)
-		action = obs_state[self.number]
-		self.decisions.append(action)
-		# Register to calculate convergence
-		trans_probs = deepcopy(self.trans_probs)
-		# Aggregate state
-		state = self._get_agg_state(action, obs_state)
-		# Agent recalls previous state?
-		if self.prev_state_ is not None:
-			prev_state = self.prev_state_
-			# Update transtion counts
-			observed_transition = (prev_state, state)
-			self.count_transitions[observed_transition] += 1
-			# Loop over states and update transition probabilities
-			for new_state in self.states:
-				transition = (prev_state, new_state)
-				numerator = self.count_transitions[transition] + self.belief_strength * self.alphas[transition]
-				denominator = self.count_states[prev_state] + self.belief_strength
-				new_prob = numerator / denominator
-				assert(new_prob <= 1), f'\nTransition:{transition}\nTransition counts:{self.count_transitions[transition]}\nState counts:{self.count_states[prev_state]}'
-				self.trans_probs[transition] = new_prob
-		# Update state counts
-		self.count_states[state] += 1
-		# Update previous state
-		self.prev_state_ = state
+	def _get_scaling_factor(self) -> None:
+		scaling_factor = 1 / (self.num_agents + 1)
+		return scaling_factor
 
-	def _get_agg_state(self, action:int, obs_state:List[int]) -> tuple:
-		agg_partners = sum([obs_state[i] for i in range(len(obs_state)) if i != self.number])
-		agg_state = 1 if agg_partners >= int(self.threshold * len(obs_state)) else 0
-		state = (action, agg_state)  
-		return state
-
-	def reset(self) -> None:
-		'''
-		Restarts the agent's data for a new trial.
-		'''
-		super().reset()
-		self.prev_state_ = None
-		self.count_states = {state:0 for state in self.states}
-		self.count_transitions = {(prev_s,new_s):0 for prev_s in self.states for new_s in self.states}
-		self.trans_probs = deepcopy(self.alphas)
-
-	def exp_util(self, prev_state:List[int], action:int) -> float:
-		'''
-		Evaluates the expected utility of an action.
-		Input:
-			- prev_state, a tuple with the state of the previous round, 
-						  where each argument is 0 or 1.
-			- action, which is a possible decision 0 or 1.
-		Output:
-			- The expected utility (float).
-		'''
-		eu = 0
-		for aggregated_partners in [0,1]:
-			state = (action, aggregated_partners)
-			v = self.payoff_matrix[action, aggregated_partners]
-			p = self.trans_probs[(tuple(prev_state), state)]
-			eu += v*p
-		return eu
-
-	def print_agent(self, ronda:Optional[Union[int, None]]=None) -> str:
-		'''
-		Returns a string with the state of the agent on a given round.
-		Input:
-			- ronda, integer with the number of the round.
-		Output:
-			- string with a representation of the agent at given round.
-		'''
-		if ronda is None:
-			try:
-				ronda = len(self.decisions) - 1
-			except:
-				ronda = 0
-		try:
-			decision = self.decisions[ronda]
-		except:
-			decision = "nan"
-		try:
-			score = self.scores[ronda]
-		except:
-			score = "nan"
-		states = [(a,b) for a in [0,1] for b in [0,1]]
-		probs = '		' + ' '.join([str(s) for s in states])
-		print(probs)
-		for prev_state in states:
-			probs += '\n' + str(prev_state)
-			for state in states:
-				dummy = str(round(self.trans_probs[(prev_state, state)],2))
-				if len(dummy) < 4:
-					dummy += '0'*(4-len(dummy))
-				probs += '   ' + dummy
-		print(f"No.agent:{self.number}, Decision:{decision}, Score:{score}, Lambda:{self.belief_strength}\ntrans_probs:\n{probs}")
-
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
-		'''
-		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
-		Output:
-			- List with no go preference followed by go preference
-		'''
-		eus = [self.exp_util(previous_state, action) for action in [0,1]]
-		if self.debug:
-			print('Expected utilities:')
-			print(f'no go:{eus[0]} ---- go:{eus[1]}')
-		return eus
-	
-	def create_alphas(self) -> None:
-
-		def get_drive(y: List[int]) -> float:
-			if y[1] == 1:
-				return self.go_drive
-			else:
-				return 0
-
-		scalling_factor = 4 + 2 * self.go_drive
-		# print('scalling_factor:', scalling_factor)
-		alphas = {(x,y):(1 + get_drive(y))/scalling_factor for x in self.states for y in self.states}
-		# print('alphas:')
-		# print(alphas)
-		for x in self.states:
-			check_list = [alphas[(x, y)] for y in self.states]
-			# print('check_list:', check_list)
-			assert(np.isclose(sum(check_list), 1))
-		return alphas
+	def _get_observed_transition(
+				self, 
+				obs_state:Tuple[int]
+			) -> Tuple[Tuple[int, int], int]:
+		assert(self.prev_state_ is not None), f'Error: prev state is None!'
+		attendance = sum(obs_state)
+		observed_transition = (self.prev_state_, attendance)
+		return observed_transition		
 
 	@staticmethod
 	def name():
-		return 'MFPAgg'
+		return 'MFP-M3'
 
+
+class MFPM1(MFPM2) :
+	'''
+	Implements an agent using the Markov Fictitious Play learning rule 
+	for multiple players.
+	This is the unconditioned model.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.states = [0]
+		self.reset()
+
+	def _get_scaling_factor(self) -> None:
+		scaling_factor = 1 
+		return scaling_factor
+
+	def _get_observed_transition(
+				self, 
+				obs_state:Tuple[int]
+			) -> Tuple[Tuple[int, int], int]:
+		assert(self.prev_state_ is not None), f'Error: prev state is None!'
+		attendance = sum(obs_state)
+		observed_transition = (0, attendance)
+		return observed_transition		
+
+	@staticmethod
+	def name():
+		return 'MFP-M1'
+
+
+free_parameters_error_driven_1 = {
+	'inverse_temperature':10,
+	'learning_rate': 0.001,
+}
+free_parameters_error_driven_2 = {
+	'inverse_temperature':10,
+	'learning_rate': 0.001,
+	'bias': 0.5
+}
 
 MODELS = {
 	'Random': {
@@ -1206,66 +1289,64 @@ MODELS = {
 			'wsls_strength':0
 		}
 	}, 
-	'QL': {
-		'class': Q_learning,
-		'free_parameters': {
-			'inverse_temperature':10,
-			"go_drive": 0,
-			"learning_rate": 0.001,
-			"discount_factor": 0.8
-		}
-	}, 
-	'QAttendance': {
-		'class': QAttendance,
-		'free_parameters': {
-			'inverse_temperature':10,
-			"go_drive": 0,
-			"learning_rate": 0.001,
-			"discount_factor": 0.8,
-			"go_discount_factor":0.5
-		}
-	}, 
-	'QFairness': {
-		'class': QFairness,
-		'free_parameters': {
-			'inverse_temperature':10,
-			"go_drive": 0,
-			"learning_rate": 0.001,
-			"discount_factor": 0.8,
-			"fairness_bias":0.5
-		}
-	}, 
-	'MFP': {
-		'class': MFP,
-		'free_parameters': {
-			"inverse_temperature":1,
-			'belief_strength':1,
-			"go_drive":0.5,
-		}
-	}, 
-	'MFPAgg': {
-		'class': MFPAgg,
-		'free_parameters': {
-			"inverse_temperature":1,
-			'belief_strength':1,
-			"go_drive":0.5,
-		}
+	'Payoff-M1': {
+		'class': PayoffM1,
+		'free_parameters': free_parameters_error_driven_1
 	},
-	'PRW': {
-		'class': PayoffRescorlaWagner,
-		'free_parameters': {
-			'inverse_temperature':10,
-			'initial_reward_estimate_go':0,
-			'initial_reward_estimate_no_go':0,
-			'learning_rate':0.1
-		}
-	}, 
-	'ARW': {
-		'class': AttendanceRescorlaWagner,
-		'free_parameters': {
-			'inverse_temperature':10,
-			'initial_luft_estimate':0,
-			'learning_rate':0.1
-		}
+	'Payoff-M2': {
+		'class': PayoffM2,
+		'free_parameters': free_parameters_error_driven_1
+	},
+	'Payoff-M3': {
+		'class': PayoffM3,
+		'free_parameters': free_parameters_error_driven_1
+	},
+	'AvailableSpace-M1': {
+		'class': AvailableSpaceM1,
+		'free_parameters': free_parameters_error_driven_1
+	},
+	'AvailableSpace-M2': {
+		'class': AvailableSpaceM2,
+		'free_parameters': free_parameters_error_driven_1
+	},
+	'AvailableSpace-M3': {
+		'class': AvailableSpaceM3,
+		'free_parameters': free_parameters_error_driven_1
+	},
+	'Attendance-M1': {
+		'class': AttendanceM1,
+		'free_parameters': free_parameters_error_driven_2
+	},
+	'Attendance-M2': {
+		'class': AttendanceM2,
+		'free_parameters': free_parameters_error_driven_2
+	},
+	'Attendance-M3': {
+		'class': AttendanceM3,
+		'free_parameters': free_parameters_error_driven_2
+	},
+	'Fairness-M1': {
+		'class': FairnessM1,
+		'free_parameters': free_parameters_error_driven_2
+	},
+	'Fairness-M2': {
+		'class': FairnessM2,
+		'free_parameters': free_parameters_error_driven_2
+	},
+	'Fairness-M3': {
+		'class': FairnessM3,
+		'free_parameters': free_parameters_error_driven_2
+	},
+	'MFP-M1': {
+		'class': MFPM1,
+		'free_parameters': {'inverse_temperature': 10}
+	},
+	'MFP-M2': {
+		'class': MFPM2,
+		'free_parameters': {'inverse_temperature': 10}
+	},
+	'MFP-M3': {
+		'class': MFPM3,
+		'free_parameters': {'inverse_temperature': 10}
 	}
 }

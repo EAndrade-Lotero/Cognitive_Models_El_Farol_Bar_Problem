@@ -84,6 +84,14 @@ class PlotStandardMeasures :
 			kwargs = dict()
 		T = kwargs.get('T', 20)
 		# Determine the number of model in data
+		# print(f'{self.data['model'].unique()=}')
+		try:
+			self.data['model'] = self.data['model'].astype(int)
+		except:
+			try:
+				self.data['model'] = self.data['model'].astype(float)
+			except:
+				pass
 		if 'only_value' in kwargs.keys():
 			if kwargs['only_value']:
 				self.data.model = self.data.model.apply(lambda x: x.split('=')[-1])
@@ -96,6 +104,12 @@ class PlotStandardMeasures :
 		get_meas = GetMeasures(
 			self.data, measures=measures, T=T)
 		data = get_meas.get_measures()
+		ordered_models = OrderStrings.dict_as_numeric(data['model'].unique())
+		data['model'] = data['model'].map(ordered_models)
+		data.sort_values(by='model', inplace=True)
+		# print('-'*60)
+		# print(data)
+		# print('-'*60)
 		# Plot per measure
 		for m in measures:
 			if folder is not None:
@@ -128,6 +142,11 @@ class PlotStandardMeasures :
 		Output:
 			- None.
 		'''
+		# Sort data by model
+		data = data.sort_values(
+			by='model', 
+			ignore_index=True
+		)
 		num_models = kwargs['num_models']
 		vs_models = kwargs['vs_models']
 		# Create the plot canvas
@@ -140,6 +159,7 @@ class PlotStandardMeasures :
 			lineplot(
 				x='model', y=variable, 
 				data=data, ax=ax, 
+				marker='o',
 				errorbar=('ci', 95)
 			)
 			ax.set_xlabel('Model')
@@ -178,6 +198,57 @@ class PlotStandardMeasures :
 			ax.yaxis.label.set_size(kwargs['y_label_size'])
 		ax.grid()
 		return ax
+
+	def plot_sweep2(
+				self, 
+				parameter1:str,
+				parameter2:str,
+				measure:str,
+				T:Optional[int]=20,
+				file:Optional[Union[Path, None]]=None,
+				kwargs:Optional[Dict[str,any]]={}
+			) -> None:
+		'''
+		Plots the average measure according to sweep of two parameters.
+		Input:
+			- parameter1, string with the first parameter name.
+			- parameter2, string with the first parameter name.
+			- measure, string with the measure.
+			- T, integer with the length of the tail sequence.
+			- file, string with the name of file to save the plot on.
+			- kwargs, dictionary with extra tweaks for the plots.
+		Output:
+			- None.
+		'''
+		if T is None:
+			T = 20
+		annot = kwargs.get('annot', False)
+		# Obtain data
+		get_meas = GetMeasures(
+			self.data, measures=[measure], T=T)
+		get_meas.columns += [parameter2, parameter1]
+		df = get_meas.get_measures()
+		df = df.groupby([parameter2, parameter1])[measure].mean().reset_index()
+		values1 = df[parameter1].unique()
+		values2 = df[parameter2].unique()
+		df = pd.pivot(
+			data=df,
+			index=[parameter1],
+			values=[measure],
+			columns=[parameter2]
+		).reset_index().to_numpy()[:,1:]
+		# Plotting...
+		fig, ax = plt.subplots(figsize=(6,6))
+		heatmap(data=df, ax=ax, annot=annot)
+		ax.set_xticklabels(np.round(values2, 2))
+		ax.set_xlabel(parameter2)
+		ax.set_yticklabels(np.round(values1, 2))
+		ax.set_ylabel(parameter1)
+		ax.set_title(f'Av. {measure}')
+		if file is not None:
+			plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
+			print('Plot saved to', file)
+		plt.close()
 
 
 class PlotsAndMeasures :

@@ -236,27 +236,6 @@ class Experiment :
 		)
 		fixed_parameters = self.fixed_parameters.copy()
 		fixed_parameters['num_agents'] = num_agents
-		if agent_class in [MFP, AgentMFPMultiSameTransProb, softmax_greedy]:
-			states = list(product([0,1], repeat=num_agents))
-			count_states = ProxyDict(
-				keys=states,
-				initial_val=0
-			)
-			count_transitions = ProxyDict(
-				keys=list(product(states, repeat=2)),
-				initial_val=0
-			)
-			fixed_parameters['states'] = states
-			fixed_parameters['count_states'] = count_states
-			fixed_parameters['count_transitions'] = count_transitions
-			if agent_class in [AgentMFPMultiSameTransProb, softmax_greedy]:
-				alphas = {(x,y):1/len(states) for x in states for y in states}
-				trans_probs = ProxyDict(
-					keys=list(product(states, repeat=2)),
-					initial_val=1/len(states)
-				)
-				free_parameters['alphas'] = alphas
-				fixed_parameters['trans_probs'] = trans_probs
 		agents = [
 			agent_class(
 				free_parameters=free_parameters, 
@@ -264,7 +243,6 @@ class Experiment :
 				n=n
 			) for n in range(num_agents)
 		]
-		agents[0].designated_agent = True
 		return bar, agents
 
 	def run_sweep1(
@@ -292,10 +270,14 @@ class Experiment :
 				bar, agents = self.initialize(num_agents=value)
 				self.environment = bar
 				self.agents = agents
-			if parameter == 'agent_class':
+			elif parameter == 'agent_class':
 				bar, agents = self.initialize(agent_class=value)
 				self.environment = bar
 				self.agents = agents
+				name = value.name()
+			# Check if parameter modifies environment
+			elif parameter == 'threshold':
+				self.environment.threshold = value
 			# Creates list for containing the modified agents
 			if parameter not in ['agent_class']:
 				# Iterate over agents
@@ -303,16 +285,8 @@ class Experiment :
 					# Modify agent's parameter with value
 					instruction = f'agent_.{parameter} = {value}'
 					exec(instruction)
-			# Check if parameter modifies environment
-			if parameter == 'threshold':
-				self.environment.threshold = value
 			# Create name
 			name = f'{parameter}={value}'
-			# Check exception for cool_down
-			if parameter == 'epsilon' and value is None:
-				name = f'{parameter}=cool_down'
-			if parameter == 'agent_class':
-				name = value.name()
 			# Create simulation
 			episode = Episode(
 				environment=self.environment,\
