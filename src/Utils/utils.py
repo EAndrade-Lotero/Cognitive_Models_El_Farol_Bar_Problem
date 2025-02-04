@@ -31,11 +31,12 @@ class OrderStrings :
 	def dict_as_numeric(list_of_strings: List[str]):
 		dict_order = {}
 		for x in list_of_strings:
+			x_string = str(x)
 			try:
-				dict_order[x] = int(x)
+				dict_order[x] = int(x_string)
 			except:
 				try:
-					dict_order[x] = float(x)
+					dict_order[x] = float(x_string)
 				except:
 					dict_order[x] = x
 		return dict_order
@@ -245,7 +246,8 @@ class ConditionalEntropy :
 	
 	def calculate_conditional_entropy(
 				self,
-				tm: TransitionsFrequencyMatrix
+				tm: TransitionsFrequencyMatrix,
+				rate: Optional[bool]=True
 			) -> float:
 		H = 0
 		A = tm.trans_freqs
@@ -260,6 +262,9 @@ class ConditionalEntropy :
 		# Calculate conditional entropy
 		prob_logs = np.multiply(joint_probs, log_cond_probs)
 		H = -sum(prob_logs.flatten())
+		if rate:
+			N = np.log2(len(tm))
+			H /= N
 		return(H)
 
 	def get_df_num_agents(
@@ -326,7 +331,7 @@ class Fourier :
 		return max(fourier)
 
 
-class GetMeasures :
+class GetMeasurements :
 	
 	def __init__(
 				self,
@@ -358,10 +363,10 @@ class GetMeasures :
 			columns.append(player_column)
 		self.columns = [c for c in columns if c in self.data.columns]
 
-	def get_measures(self) -> pd.DataFrame:
+	def get_measurements(self) -> pd.DataFrame:
 		init = True
 		for measure in self.measures:
-			fun = eval(f'GetMeasures.{measure}')
+			fun = eval(f'GetMeasurements.{measure}')
 			if init:
 				df = self.data.groupby(self.columns).apply(fun).reset_index()
 				df.rename(columns={0:measure}, inplace=True)
@@ -378,18 +383,18 @@ class GetMeasures :
 
 	@staticmethod
 	def attendance(df: pd.DataFrame) -> float:
-		# assert(GetMeasures.one_group_only(df))
+		# assert(GetMeasurements.one_group_only(df))
 		decision_column = PPT.get_decision_column(df.columns)
 		return df[decision_column].mean()
 
 	@staticmethod
 	def efficiency(df: pd.DataFrame) -> float:
-		# assert(GetMeasures.one_group_only(df))
+		# assert(GetMeasurements.one_group_only(df))
 		return df.score.mean()
 
 	@staticmethod
 	def inequality(df: pd.DataFrame) -> float:
-		# assert(GetMeasures.one_group_only(df))
+		# assert(GetMeasurements.one_group_only(df))
 		player_column = PPT.get_player_column(df.columns)
 		mean_scores = df.groupby(player_column)['score'].mean().reset_index()
 		# mean_scores['score'] = (mean_scores['score'] + 1) / 2
@@ -397,19 +402,19 @@ class GetMeasures :
 
 	@staticmethod
 	def entropy(df: pd.DataFrame) -> float:
-		# assert(GetMeasures.one_group_only(df))
+		# assert(GetMeasurements.one_group_only(df))
 		ge = ConditionalEntropy(df, T=np.infty)
 		return ge.get_group_entropy(df)
 
 	@staticmethod
 	def conditional_entropy(df: pd.DataFrame) -> float:
-		# assert(GetMeasures.one_group_only(df))
+		# assert(GetMeasurements.one_group_only(df))
 		ge = ConditionalEntropy(df, T=np.infty)
 		return ge.get_group_conditional_entropy(df)
 
 	@staticmethod
 	def fourier(df: pd.DataFrame) -> float:
-		# assert(GetMeasures.one_group_only(df))
+		# assert(GetMeasurements.one_group_only(df))
 		return Fourier.get_group_max_fourier(df)
 
 	@staticmethod

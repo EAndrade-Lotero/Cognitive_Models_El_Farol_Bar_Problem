@@ -32,7 +32,7 @@ from Utils.utils import (
 	OrderStrings, 
 	ConditionalEntropy,
 	PathUtils,
-	GetMeasures
+	GetMeasurements
 )
 
 
@@ -65,6 +65,7 @@ class PlotStandardMeasures :
 				measures: List[str], 
 				folder: Union[None, Path],
 				kwargs: Optional[Union[Dict[str, str], None]]=None,
+				categorical: Optional[bool]=False,
 				suffix: Optional[Union[None, str]]=None
 			) -> List[Path]:
 		'''
@@ -85,6 +86,16 @@ class PlotStandardMeasures :
 		T = kwargs.get('T', 20)
 		# Determine the number of model in data
 		# print(f'{self.data['model'].unique()=}')
+
+		if 'only_value' in kwargs.keys():
+			if kwargs['only_value']:
+				self.data.model = self.data.model.apply(lambda x: x.split('=')[-1])
+		elif 'model_names' in kwargs.keys():
+			assert(isinstance(kwargs['model_names'], dict))
+			try:
+				self.data.model = self.data.model.map(kwargs['model_names'])
+			except:
+				print("Warning: applying model names from kwargs didn't work.")
 		try:
 			self.data['model'] = self.data['model'].astype(int)
 		except:
@@ -92,18 +103,15 @@ class PlotStandardMeasures :
 				self.data['model'] = self.data['model'].astype(float)
 			except:
 				pass
-		if 'only_value' in kwargs.keys():
-			if kwargs['only_value']:
-				self.data.model = self.data.model.apply(lambda x: x.split('=')[-1])
 		models = self.data.model.unique()
 		num_models = len(models)
 		vs_models = True if len(models) > 1 else False
 		kwargs['num_models'] = num_models
 		kwargs['vs_models'] = vs_models
 		# Obtain data
-		get_meas = GetMeasures(
+		get_meas = GetMeasurements(
 			self.data, measures=measures, T=T)
-		data = get_meas.get_measures()
+		data = get_meas.get_measurements()
 		ordered_models = OrderStrings.dict_as_numeric(data['model'].unique())
 		data['model'] = data['model'].map(ordered_models)
 		data.sort_values(by='model', inplace=True)
@@ -122,6 +130,7 @@ class PlotStandardMeasures :
 				measure=m, 
 				data=data,
 				kwargs=kwargs_,
+				categorical=categorical,
 				file=file_
 			)
 			list_of_paths.append(file_)
@@ -132,6 +141,7 @@ class PlotStandardMeasures :
 				measure: str,
 				data: pd.DataFrame,
 				kwargs: Dict[str,any],
+				categorical: Optional[bool]=False,
 				file: Optional[Union[Path, None]]=None
 			) -> Union[plt.axis, None]:
 		'''
@@ -142,11 +152,6 @@ class PlotStandardMeasures :
 		Output:
 			- None.
 		'''
-		# Sort data by model
-		data = data.sort_values(
-			by='model', 
-			ignore_index=True
-		)
 		num_models = kwargs['num_models']
 		vs_models = kwargs['vs_models']
 		# Create the plot canvas
@@ -156,12 +161,18 @@ class PlotStandardMeasures :
 		)
 		variable = measure
 		if vs_models:
-			lineplot(
-				x='model', y=variable, 
-				data=data, ax=ax, 
-				marker='o',
-				errorbar=('ci', 95)
-			)
+			if not categorical:
+				lineplot(
+					x='model', y=variable, 
+					data=data, ax=ax, 
+					marker='o',
+					errorbar=('ci', 95)
+				)
+			else:
+				violinplot(
+					x='model', y=variable, 
+					data=data, ax=ax, 
+				)
 			ax.set_xlabel('Model')
 			ax.set_ylabel(variable)
 			# ax.set_ylim([-1.1, 1.1])
@@ -224,10 +235,10 @@ class PlotStandardMeasures :
 			T = 20
 		annot = kwargs.get('annot', False)
 		# Obtain data
-		get_meas = GetMeasures(
+		get_meas = GetMeasurements(
 			self.data, measures=[measure], T=T)
 		get_meas.columns += [parameter2, parameter1]
-		df = get_meas.get_measures()
+		df = get_meas.get_measurements()
 		df = df.groupby([parameter2, parameter1])[measure].mean().reset_index()
 		values1 = df[parameter1].unique()
 		values2 = df[parameter2].unique()
@@ -239,7 +250,7 @@ class PlotStandardMeasures :
 		).reset_index().to_numpy()[:,1:]
 		# Plotting...
 		fig, ax = plt.subplots(figsize=(6,6))
-		heatmap(data=df, ax=ax, annot=annot)
+		heatmap(data=df, ax=ax, annot=True)
 		ax.set_xticklabels(np.round(values2, 2))
 		ax.set_xlabel(parameter2)
 		ax.set_yticklabels(np.round(values1, 2))
@@ -1285,8 +1296,8 @@ class PlotsAndMeasures :
 		vs_models = True if len(models) > 1 else False
 		# Get efficiency and entropy
 		measures = ['efficiency', 'entropy']
-		gm = GetMeasures(self.data, measures, T=T)
-		df_measures = gm.get_measures()
+		gm = GetMeasurements(self.data, measures, T=T)
+		df_measures = gm.get_measurements()
 		# Create the plot canvas
 		fig, ax = plt.subplots(figsize=(self.width, self.height))
 		ax.set_xlabel('Entropy')
@@ -1358,8 +1369,8 @@ class PlotsAndMeasures :
 		vs_models = True if len(models) > 1 else False
 		# Get inequality and attendance
 		measures = ['inequality', 'attendance']
-		gm = GetMeasures(self.data, measures, T=T)
-		df_measures = gm.get_measures()
+		gm = GetMeasurements(self.data, measures, T=T)
+		df_measures = gm.get_measurements()
 		# Create the plot canvas
 		fig, ax = plt.subplots(figsize=(self.width, self.height))
 		ax.set_xlabel('Attendance')
@@ -1431,8 +1442,8 @@ class PlotsAndMeasures :
 		vs_models = True if len(models) > 1 else False
 		# Get inequality and efficiency
 		measures = ['inequality', 'efficiency']
-		gm = GetMeasures(self.data, measures, T=T)
-		df_measures = gm.get_measures()
+		gm = GetMeasurements(self.data, measures, T=T)
+		df_measures = gm.get_measurements()
 		# Create the plot canvas
 		fig, ax = plt.subplots(figsize=(self.width, self.height))
 		ax.set_xlabel('Efficiency')
@@ -1504,8 +1515,8 @@ class PlotsAndMeasures :
 		vs_models = True if len(models) > 1 else False
 		# Get attendance and efficiency
 		measures = ['attendance', 'efficiency']
-		gm = GetMeasures(self.data, measures, T=T)
-		df_measures = gm.get_measures()
+		gm = GetMeasurements(self.data, measures, T=T)
+		df_measures = gm.get_measurements()
 		# Create the plot canvas
 		fig, ax = plt.subplots(figsize=(self.width, self.height))
 		ax.set_xlabel('Attendance')
@@ -1577,8 +1588,8 @@ class PlotsAndMeasures :
 		vs_models = True if len(models) > 1 else False
 		# Get inequality and entropy
 		measures = ['inequality', 'entropy']
-		gm = GetMeasures(self.data, measures, T=T)
-		df_measures = gm.get_measures()
+		gm = GetMeasurements(self.data, measures, T=T)
+		df_measures = gm.get_measurements()
 		# Create the plot canvas
 		fig, ax = plt.subplots(figsize=(self.width, self.height))
 		ax.set_xlabel('Entropy')
@@ -1650,13 +1661,13 @@ class PlotsAndMeasures :
 		vs_models = True if len(models) > 1 else False
 		# Get attendance and efficiency
 		measures = ['attendance', 'efficiency']
-		gm = GetMeasures(
+		gm = GetMeasurements(
 			data=self.data, 
 			measures=measures, 
 			T=T,
 			per_player=True
 		)
-		df_measures = gm.get_measures()
+		df_measures = gm.get_measurements()
 		# Create the plot canvas
 		fig, ax = plt.subplots(figsize=(self.width*num_models, self.height))
 		ax.set_xlabel('Av. going')

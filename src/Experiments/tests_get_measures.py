@@ -4,7 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from Classes.cognitive_model_agents import Random
-from Utils.utils import GetMeasures
+from Utils.utils import GetMeasurements
 from Utils.interaction import Performer
 from Utils.plot_utils import PlotsAndMeasures
 
@@ -35,8 +35,8 @@ def test_measures():
 		'attendance', 'efficiency',
 		'inequality', 'entropy'
 	]
-	gm = GetMeasures(df_human, measures)
-	df_measures = gm.get_measures()
+	gm = GetMeasurements(df_human, measures)
+	df_measures = gm.get_measurements()
 	print(df_measures)
 
 def test_kde_per_player():

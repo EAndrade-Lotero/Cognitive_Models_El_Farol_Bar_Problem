@@ -561,7 +561,7 @@ class PayoffM3(PayoffM1) :
 		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
-		self.backup_Q = np.zeros(self.num_agents, 2)
+		self.backup_Q = np.zeros((2 ** self.num_agents, 2))
 		self.Q = deepcopy(self.backup_Q)
 
 	def determine_action_preferences(
@@ -583,7 +583,7 @@ class PayoffM3(PayoffM1) :
 
 	def learn(
 				self,
-				action: int
+				obs_state: Tuple[int],
 			) -> None:
 		'''
 		Agent updates their action preferences
@@ -594,8 +594,10 @@ class PayoffM3(PayoffM1) :
 		'''
 		# Get previous state
 		previous_state = self.prev_state_
+		# Get action
+		action = obs_state[self.number]
 		# Observe G 
-		G = self._get_G(action)
+		G = self._get_G(obs_state)
 		# Determine error prediction
 		index_previous_state = self._get_index(previous_state)
 		delta = G - self.Q[index_previous_state, action]

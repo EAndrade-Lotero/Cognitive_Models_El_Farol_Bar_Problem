@@ -576,6 +576,7 @@ class Performer :
 			num_agents = fixed_parameters['num_agents']
 			threshold = fixed_parameters['threshold']
 			num_rounds = simulation_parameters['num_rounds']
+			num_episodes = simulation_parameters['num_episodes']
 			verbose = simulation_parameters['verbose']
 			agent_class = dict_['agent_class']
 			agents = [
@@ -609,15 +610,19 @@ class Performer :
 			#-------------------------------
 			# Run simulation
 			#-------------------------------
-			df = episode.simulate(verbose=verbose)
+			df = episode.simulate(
+				num_episodes=num_episodes,
+				verbose=verbose
+			)
 			df['model'] = f'{agent_class.name()}-{semilla}'
 			df_list.append(df)
 		df = pd.concat(df_list, ignore_index=True)
-		p = PlotsAndMeasures(df)
+		p = PlotStandardMeasures(df)
 		list_images = p.plot_measures(					
 			folder=image_folder,
 			measures=measures,
-			kwargs=kwargs
+			kwargs=kwargs,
+			categorical=True
 		)
 		#-------------------------------
 		# Create latex string
