@@ -14,7 +14,7 @@ def test_bar_is_full(agent:CogMod, num_rounds=10) -> None:
     agent.prev_state_ = tuple(state)
     for i in range(num_rounds):
         print(f'---------- Round {i} ----------')
-        preferences = agent.determine_action_preferences(state)
+        preferences = agent.determine_action_preferences()
         print(f'Action preferences in state {state}: {preferences}')
         action = agent.make_decision()
         print('Chosen action:', action)
@@ -38,7 +38,7 @@ def test_bar_has_capacity(agent:CogMod, num_rounds=10) -> None:
     agent.prev_state_ = tuple(state)
     for i in range(num_rounds):
         print(f'---------- Round {i} ----------')
-        preferences = agent.determine_action_preferences(state)
+        preferences = agent.determine_action_preferences()
         print(f'Action preferences in state {state}: {preferences}')
         action = agent.make_decision()
         print('Chosen action:', action)
@@ -63,7 +63,7 @@ def test_alternation(agent:CogMod, num_rounds=10) -> None:
     agent.prev_state_ = tuple(state)
     for i in range(num_rounds):
         print(f'---------- Round {i} ----------')
-        preferences = agent.determine_action_preferences(state)
+        preferences = agent.determine_action_preferences()
         print(f'Action preferences in state {state}: {preferences}')
         action = agent.make_decision()
         print('Chosen action:', action)

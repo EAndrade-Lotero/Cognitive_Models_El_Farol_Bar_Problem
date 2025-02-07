@@ -79,7 +79,7 @@ class CogMod () :
 		# Agent recalls previous state?
 		if self.prev_state_ is not None:
 			# determine action preferences given previous state
-			preferences = self.determine_action_preferences(self.prev_state_)
+			preferences = self.determine_action_preferences()
 			probabilities = self.softmax(preferences)
 			if self.debug:
 				print('Action probabilities:')
@@ -154,7 +154,7 @@ class CogMod () :
 		assert(np.all([not np.isnan(n) for n in softmax_values])), f'numerator:{numerator} --- denominator: {denominator} --- preferences:{preferences}'
 		return softmax_values
 
-	def determine_action_preferences(self, prev_state:any) -> List[float]:
+	def determine_action_preferences(self) -> List[float]:
 		# To be defined by subclass
 		pass
 
@@ -303,24 +303,23 @@ class WSLS(CogMod) :
 		self.go_drive = free_parameters["go_drive"]
 		self.wsls_strength = free_parameters["wsls_strength"]
 
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
+	def determine_action_preferences(self) -> List[float]:
 		'''
 		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
 		Output:
 			- List with no go preference followed by go preference
 		'''
 		# Get previous action
-		action = self.decisions[-1]
+		previous_state = self.prev_state_
+		action = previous_state[self.number]
 		assert(isinstance(action, int) or isinstance(action, np.int16)), f'Error: action of type {type(action)}. Type int was expected. (previous actions: {self.decisions})'
 		# Use model to determine preferences
 		payoff = self.payoff(action, previous_state)
 		go_preference = self.go_drive + self.wsls_strength * payoff
 		no_go_preference = 1 - self.go_drive
+		if self.debug:
+			print(f'payoff: {payoff}')
+			print(f'go_preference = {self.go_drive} + {self.wsls_strength} * {payoff}')
 		# Return preferences
 		preferences = [no_go_preference, go_preference]
 		return preferences
@@ -360,18 +359,13 @@ class PayoffM1(CogMod) :
 		self.backup_Q = np.zeros(2)
 		self.Q = deepcopy(self.backup_Q)
 
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
+	def determine_action_preferences(self) -> List[float]:
 		'''
 		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
 		Output:
 			- List with no go preference followed by go preference
 		'''
-		if previous_state is None:
+		if self.prev_state_ is None:
 			return [0, 0]
 		else:
 			return self.Q
@@ -467,21 +461,16 @@ class PayoffM2(PayoffM1) :
 		self.backup_Q = np.zeros((2, self.num_agents, 2))
 		self.Q = deepcopy(self.backup_Q)
 
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
+	def determine_action_preferences(self) -> List[float]:
 		'''
 		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
 		Output:
 			- List with no go preference followed by go preference
 		'''
-		if previous_state is None:
+		if self.prev_state_ is None:
 			return [0, 0]
 		else:
-			prev_action, attendance = self._get_index(previous_state)
+			prev_action, attendance = self._get_index(self.prev_state_)
 			return self.Q[prev_action, attendance, :]
 
 	def learn(
@@ -564,21 +553,16 @@ class PayoffM3(PayoffM1) :
 		self.backup_Q = np.zeros((2 ** self.num_agents, 2))
 		self.Q = deepcopy(self.backup_Q)
 
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
+	def determine_action_preferences(self) -> List[float]:
 		'''
 		Agent determines their preferences to go to the bar or not.
-		Input:
-			- state, list of decisions of all agents
 		Output:
 			- List with no go preference followed by go preference
 		'''
-		if previous_state is None:
+		if self.prev_state_ is None:
 			return [0, 0]
 		else:
-			index_previous_state = self._get_index(previous_state)
+			index_previous_state = self._get_index(self.prev_state_)
 			return self.Q[index_previous_state, :]
 
 	def learn(
@@ -657,11 +641,15 @@ class AvailableSpaceM1(PayoffM1) :
 
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
-		# Get previous attendance
-		previous_attendance = np.sum(self.prev_state_)
-		G = self.threshold * self.num_agents - previous_attendance
+		# Get attendance other players
+		attendance_others = np.sum(obs_state) - action
+		G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
 		if self.debug:
-			print(f'Previous attendance: {previous_attendance}')
+			print(f'Attendance other players: {attendance_others}')
+			if action == 0:
+				print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
+			elif action == 1:
+				print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
 			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
 		return G
 
@@ -695,11 +683,15 @@ class AvailableSpaceM2(PayoffM2) :
 
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
-		# Get previous attendance
-		previous_attendance = np.sum(self.prev_state_)
-		G = self.threshold * self.num_agents - previous_attendance
+		# Get attendance other players
+		attendance_others = np.sum(obs_state) - action
+		G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
 		if self.debug:
-			print(f'Previous attendance: {previous_attendance}')
+			print(f'Attendance other players: {attendance_others}')
+			if action == 0:
+				print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
+			elif action == 1:
+				print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
 			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
 		return G
 
@@ -732,13 +724,18 @@ class AvailableSpaceM3(PayoffM3) :
 
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
-		# Get previous attendance
-		previous_attendance = np.sum(self.prev_state_)
-		G = self.threshold * self.num_agents - previous_attendance
+		# Get attendance other players
+		attendance_others = np.sum(obs_state) - action
+		G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
 		if self.debug:
-			print(f'Previous attendance: {previous_attendance}')
+			print(f'Attendance other players: {attendance_others}')
+			if action == 0:
+				print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
+			elif action == 1:
+				print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
 			print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
 		return G
+
 
 	@staticmethod
 	def name():
