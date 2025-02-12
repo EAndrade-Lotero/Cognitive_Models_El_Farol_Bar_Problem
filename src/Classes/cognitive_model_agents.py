@@ -169,7 +169,11 @@ class CogMod () :
 		# Update records
 		self.scores.append(score)
 		action = obs_state[self.number]
-		assert(isinstance(action, int) or isinstance(action, np.int16)), f'Error: action of type {type(action)}. Type int was expected. (previous actions: {self.decisions})'
+		try:
+			action = int(action)
+		except Exception as e:
+			print(f'Error: action of type {type(action)}. Type int was expected. (previous actions: {self.decisions})')
+			raise Exception(e)
 		self.decisions.append(action)
 		self.prev_state_ = obs_state
 
@@ -312,7 +316,6 @@ class WSLS(CogMod) :
 		# Get previous action
 		previous_state = self.prev_state_
 		action = previous_state[self.number]
-		assert(isinstance(action, int) or isinstance(action, np.int16)), f'Error: action of type {type(action)}. Type int was expected. (previous actions: {self.decisions})'
 		# Use model to determine preferences
 		payoff = self.payoff(action, previous_state)
 		go_preference = self.go_drive + self.wsls_strength * payoff

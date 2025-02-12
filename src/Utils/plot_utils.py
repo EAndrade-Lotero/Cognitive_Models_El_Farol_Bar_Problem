@@ -41,7 +41,7 @@ class PlotStandardMeasures :
 	Plots standard measures
 	'''
 	dpi = 300
-	extension = 'pdf'
+	extension = 'png'
 	width = 3
 	height = 3.5
 	cmaps = ["Blues", "Reds", "Greens", "Yellows"]
@@ -155,8 +155,12 @@ class PlotStandardMeasures :
 		num_models = kwargs['num_models']
 		vs_models = kwargs['vs_models']
 		# Create the plot canvas
+		if 'figsize' in kwargs.keys():
+			figsize = kwargs['figsize']
+		else:
+			figsize = (self.width * num_models, self.height)
 		fig, ax = plt.subplots(
-			figsize = (self.width * num_models, self.height),
+			figsize=figsize,
 			tight_layout=True
 		)
 		variable = measure
