@@ -772,7 +772,7 @@ class AttendanceM1(PayoffM1) :
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
 		# Get go frequency
-		average_go = np.mean(self.decisions)
+		average_go = np.mean(self.decisions + [action])
 		# Get payoff
 		payoff = self.payoff(action, obs_state)
 		G = self.bias * average_go + (1 - self.bias) * payoff
@@ -814,7 +814,7 @@ class AttendanceM2(PayoffM2) :
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
 		# Get go frequency
-		average_go = np.mean(self.decisions)
+		average_go = np.mean(self.decisions + [action])
 		# Get payoff
 		payoff = self.payoff(action, obs_state)
 		G = self.bias * average_go + (1 - self.bias) * payoff
@@ -855,7 +855,7 @@ class AttendanceM3(PayoffM3) :
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
 		# Get go frequency
-		average_go = np.mean(self.decisions)
+		average_go = np.mean(self.decisions + [action])
 		# Get payoff
 		payoff = self.payoff(action, obs_state)
 		G = self.bias * average_go + (1 - self.bias) * payoff
@@ -897,7 +897,8 @@ class FairnessM1(PayoffM1) :
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
 		# Get go frequency
-		average_fairness = self.threshold - np.mean(self.decisions)
+		average_fairness = np.mean(self.decisions + [action]) - self.threshold
+		average_fairness = average_fairness * (1 - 2 * action)
 		# Get payoff
 		payoff = self.payoff(action, obs_state)
 		G = self.bias * average_fairness + (1 - self.bias) * payoff
@@ -909,7 +910,7 @@ class FairnessM1(PayoffM1) :
 
 	@staticmethod
 	def name():
-		return 'Fairness-M2'
+		return 'Fairness-M1'
 
 
 class FairnessM2(PayoffM2) :
@@ -940,7 +941,8 @@ class FairnessM2(PayoffM2) :
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
 		# Get go frequency
-		average_fairness = self.threshold - np.mean(self.decisions)
+		average_fairness = np.mean(self.decisions + [action]) - self.threshold
+		average_fairness = average_fairness * (1 - 2 * action)
 		# Get payoff
 		payoff = self.payoff(action, obs_state)
 		G = self.bias * average_fairness + (1 - self.bias) * payoff
@@ -952,7 +954,7 @@ class FairnessM2(PayoffM2) :
 
 	@staticmethod
 	def name():
-		return 'Fairness-M1'
+		return 'Fairness-M2'
 	
 
 class FairnessM3(PayoffM3) :
@@ -982,7 +984,8 @@ class FairnessM3(PayoffM3) :
 	def _get_G(self, obs_state: Tuple[int]) -> float:
 		action = obs_state[self.number]
 		# Get go frequency
-		average_fairness = self.threshold - np.mean(self.decisions)
+		average_fairness = np.mean(self.decisions + [action]) - self.threshold
+		average_fairness = average_fairness * (1 - 2 * action)
 		# Get payoff
 		payoff = self.payoff(action, obs_state)
 		G = self.bias * average_fairness + (1 - self.bias) * payoff

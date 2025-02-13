@@ -46,7 +46,6 @@ class PlotStandardMeasures :
 	height = 3.5
 	cmaps = ["Blues", "Reds", "Greens", "Yellows"]
 	standard_measures = [
-		'attendance', 
 		'efficiency', 
 		'inequality',
 		'entropy',
