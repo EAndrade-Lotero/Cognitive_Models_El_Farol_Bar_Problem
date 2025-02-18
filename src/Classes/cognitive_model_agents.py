@@ -745,7 +745,6 @@ class AvailableSpaceM3(PayoffM3) :
 		return 'AvailableSpace-M3'
 
 
-
 class AttendanceM1(PayoffM1) :
 	'''
 	Defines the error-driven learning rule based on 
@@ -1000,7 +999,7 @@ class FairnessM3(PayoffM3) :
 		return 'Fairness-M3'
 	
 
-class MFPM2(CogMod) :
+class MFPM1(CogMod) :
 	'''
 	Implements an agent using the Markov Fictitious Play learning rule 
 	for multiple players.
@@ -1024,39 +1023,11 @@ class MFPM2(CogMod) :
 		#--------------------------------------------
 		# Create counters
 		#--------------------------------------------
-		self.states = list(product([0, 1], np.arange(self.num_agents)))
-		self.count_states = ProxyDict(keys=self.states, initial_val=0)
-		self.count_transitions = ProxyDict(
-			keys=list(product(self.states, np.arange(self.num_agents + 1))),
-			initial_val=0
-		)
-		#--------------------------------------------
-		# Create transition probabilities
-		#--------------------------------------------
-		self.trans_probs = ProxyDict(
-			keys=list(product(self.states, np.arange(self.num_agents + 1))),
-			initial_val=self._get_scaling_factor()
-		)
+		self.states = [0]
+		self.reset()
+		self.belief_bias = free_parameters['belief_bias']
 
-	def _get_scaling_factor(self) -> None:
-		scaling_factor = 1 / 2
-		return scaling_factor
-
-	def _get_observed_transition(
-				self, 
-				obs_state:Tuple[int]
-			) -> Tuple[Tuple[int, int], int]:
-		action = obs_state[self.number]
-		others_attendance = sum(self.prev_state_) - action
-		prev_state = (action, others_attendance)
-		attendance = sum(obs_state)
-		observed_transition = (prev_state, attendance)
-		return observed_transition		
-
-	def determine_action_preferences(
-				self,
-				previous_state: List[int]
-			) -> List[float]:
+	def determine_action_preferences(self) -> List[float]:
 		'''
 		Agent determines their preferences to go to the bar or not.
 		Input:
@@ -1064,13 +1035,16 @@ class MFPM2(CogMod) :
 		Output:
 			- List with no go preference followed by go preference
 		'''
-		eus = [self.exp_util(previous_state, action) for action in [0,1]]
+		if self.prev_state_ is not None:
+			eus = [self.exp_util(action) for action in [0,1]]
+		else:
+			eus = [0, 0]
 		if self.debug:
 			print('Expected utilities:')
 			print(f'no go:{eus[0]} ---- go:{eus[1]}')
 		return eus
 	
-	def exp_util(self, prev_state, action):
+	def exp_util(self, action):
 		'''
 		Evaluates the expected utility of an action.
 		Input:
@@ -1083,10 +1057,11 @@ class MFPM2(CogMod) :
 		if action == 0:
 			return 0
 		else:
-			bar_with_capacity = [n for n in range(self.num_agents) if n <= self.threshold * self.num_agents]
-			bar_crowded = [n for n in range(self.num_agents) if n > self.threshold * self.num_agents]
-			prob_capacity = sum([self.trans_probs((tuple(prev_state), n)) for n in bar_with_capacity])
-			prob_crowded = sum([self.trans_probs((tuple(prev_state), n)) for n in bar_crowded])
+			prev_sate = self.get_prev_state()
+			numerator = self.count_bar_with_capacity(prev_sate) + self.belief_bias
+			denominator = self.count_states(prev_sate) + 2 * self.belief_bias
+			prob_capacity = numerator / denominator
+			prob_crowded = 1 - prob_capacity
 			eu = prob_capacity - prob_crowded
 			if self.debug:
 				print(f'{prob_capacity=} --- {prob_crowded=}')
@@ -1101,28 +1076,26 @@ class MFPM2(CogMod) :
 						where each argument is 0 or 1.
 		Input:
 		'''
-		if isinstance(obs_state, list):
-			obs_state = tuple(obs_state)
 		# Update records
 		self.scores.append(score)
 		self.decisions.append(obs_state[self.number])
 		# Agent recalls previous state?
 		if self.prev_state_ is not None:
-			observed_transition = self._get_observed_transition(obs_state)
-			prev_state = observed_transition[0]
-			# Update transtion counts
-			self.count_transitions.increment(observed_transition)
-			# Loop over states and update transition probabilities
-			for new_state in self.states:
-				transition = (prev_state, new_state)
-				numerator = self.count_transitions(transition) + 1
-				denominator = self.count_states(tuple(prev_state)) + self.num_agents + 1
-				new_prob = numerator / denominator
-				assert(0 <= new_prob <= 1), self._get_error_message(new_prob, transition, prev_state)
-				# print(f'agente {self.number} --- transición {prev_state}=>{new_state} --- pasa de {round(self.trans_probs(transition))} a {round(new_prob,2)}')
-				self.trans_probs.update(transition, new_prob)
-		# Update state counts
-		self.count_states.increment(obs_state)
+			prev_state = self.get_prev_state()
+			# Increment count of states
+			self.count_states.increment(prev_state)
+			# Find other player's attendance
+			action = obs_state[self.number]
+			other_players_attendance = sum(obs_state) - action
+			if other_players_attendance < int(self.threshold * self.num_agents):
+				# Increment count of bar with capacity given previous state
+				self.count_bar_with_capacity.increment(prev_state)
+		if self.debug:
+			print(f'I see the previous state: {prev_state}')
+			print('I recall the following frequencies of states:')
+			print(self.count_states)
+			print('I recall the following frequencies of bar with capacity:')
+			print(self.count_bar_with_capacity)
 		# Update previous state
 		self.prev_state_ = obs_state
 
@@ -1145,15 +1118,11 @@ class MFPM2(CogMod) :
 		super().reset()
 		self.prev_state_ = None
 		self.count_states = ProxyDict(keys=self.states, initial_val=0)
-		self.count_transitions = ProxyDict(
-			keys=list(product(self.states, np.arange(self.num_agents + 1))),
+		self.count_bar_with_capacity = ProxyDict(
+			keys=self.states,
 			initial_val=0
 		)
-		self.trans_probs = ProxyDict(
-			keys=list(product(self.states, np.arange(self.num_agents + 1))),
-			initial_val=self._get_scaling_factor()
-		)
-		
+
 	def print_agent(self, ronda:int=None) -> str:
 		'''
 		Returns a string with the state of the agent on a given round.
@@ -1179,13 +1148,52 @@ class MFPM2(CogMod) :
 		tp = TransitionsFrequencyMatrix(num_agents=self.num_agents)
 		tp.from_proxydict(self.trans_probs)
 		print(tp)
-	
+
+	def get_prev_state(self):
+		return 0
+
+	@staticmethod
+	def name():
+		return 'MFP-M1'
+
+
+class MFPM2(MFPM1) :
+	'''
+	Implements an agent using the Markov Fictitious Play learning rule 
+	for multiple players.
+	This is the unconditioned model.
+	'''
+
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		self.states = list(product([0, 1], np.arange(self.num_agents)))
+		self.reset()
+
+	def get_prev_state(self):
+		assert(self.prev_state_ is not None)
+		action = self.prev_state_[self.number]
+		others_attendance = sum(self.prev_state_) - action 
+		prev_state = (action, others_attendance)
+		return prev_state
+
 	@staticmethod
 	def name():
 		return 'MFP-M2'
+	
 
-
-class MFPM3(MFPM2) :
+class MFPM3(MFPM1) :
 	'''
 	Implements an agent using the Markov Fictitious Play learning rule 
 	for multiple players.
@@ -1209,64 +1217,12 @@ class MFPM3(MFPM2) :
 		self.states = list(product([0, 1], repeat=self.num_agents))
 		self.reset()
 
-	def _get_scaling_factor(self) -> None:
-		scaling_factor = 1 / (self.num_agents + 1)
-		return scaling_factor
-
-	def _get_observed_transition(
-				self, 
-				obs_state:Tuple[int]
-			) -> Tuple[Tuple[int, int], int]:
-		assert(self.prev_state_ is not None), f'Error: prev state is None!'
-		attendance = sum(obs_state)
-		observed_transition = (self.prev_state_, attendance)
-		return observed_transition		
+	def get_prev_state(self):
+		return self.prev_state_
 
 	@staticmethod
 	def name():
 		return 'MFP-M3'
-
-
-class MFPM1(MFPM2) :
-	'''
-	Implements an agent using the Markov Fictitious Play learning rule 
-	for multiple players.
-	This is the unconditioned model.
-	'''
-
-	def __init__(
-				self, 
-				free_parameters:Optional[Dict[str,any]]={}, 
-				fixed_parameters:Optional[Dict[str,any]]={}, 
-				n:Optional[int]=1
-			) -> None:
-		#----------------------
-		# Initialize superclass
-		#----------------------
-		super().__init__(
-			free_parameters=free_parameters, 
-			fixed_parameters=fixed_parameters, 
-			n=n
-		)
-		self.states = [0]
-		self.reset()
-
-	def _get_scaling_factor(self) -> None:
-		scaling_factor = 1 
-		return scaling_factor
-
-	def _get_observed_transition(
-				self, 
-				obs_state:Tuple[int]
-			) -> Tuple[Tuple[int, int], int]:
-		assert(self.prev_state_ is not None), f'Error: prev state is None!'
-		attendance = sum(obs_state)
-		observed_transition = (0, attendance)
-		return observed_transition		
-
-	@staticmethod
-	def name():
-		return 'MFP-M1'
 
 
 free_parameters_error_driven_1 = {
@@ -1277,6 +1233,10 @@ free_parameters_error_driven_2 = {
 	'inverse_temperature':10,
 	'learning_rate': 0.001,
 	'bias': 0.5
+}
+free_parameters_MFP = {
+	'inverse_temperature':10,
+	'belief_bias': 10
 }
 
 MODELS = {
@@ -1344,14 +1304,14 @@ MODELS = {
 	},
 	'MFP-M1': {
 		'class': MFPM1,
-		'free_parameters': {'inverse_temperature': 10}
+		'free_parameters': free_parameters_MFP
 	},
 	'MFP-M2': {
 		'class': MFPM2,
-		'free_parameters': {'inverse_temperature': 10}
+		'free_parameters': free_parameters_MFP
 	},
 	'MFP-M3': {
 		'class': MFPM3,
-		'free_parameters': {'inverse_temperature': 10}
+		'free_parameters': free_parameters_MFP
 	}
 }

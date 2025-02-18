@@ -17,8 +17,6 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from Classes.agents import Agent
-from Classes.agent_utils import ProxyDict
-from Classes.cognitive_model_agents import MFP
 from Utils.utils import PPT
 
 
@@ -304,21 +302,21 @@ class GetDeviance:
         fixed parameters and the corresponding group from the data'''
         list_fixed_parameters = list()
         params_list = PPT.get_fixed_parameters(self.data)
-        if self.model == MFP:
-            for params in params_list:
-                    states = list(product([0,1], repeat=int(params["num_agents"])))
-                    count_states = ProxyDict(
-                        keys=states,
-                        initial_val=0
-                    )
-                    count_transitions = ProxyDict(
-                        keys=list(product(states, repeat=2)),
-                        initial_val=0
-                    )
-                    params["states"] = states
-                    params["count_states"] = count_states
-                    params["count_transitions"] = count_transitions
-                    params["designated_agent"] = False
+        # if self.model == MFP:
+        #     for params in params_list:
+        #             states = list(product([0,1], repeat=int(params["num_agents"])))
+        #             count_states = ProxyDict(
+        #                 keys=states,
+        #                 initial_val=0
+        #             )
+        #             count_transitions = ProxyDict(
+        #                 keys=list(product(states, repeat=2)),
+        #                 initial_val=0
+        #             )
+        #             params["states"] = states
+        #             params["count_states"] = count_states
+        #             params["count_transitions"] = count_transitions
+        #             params["designated_agent"] = False
         return params_list
 
     def get_deviance_given_parameters(
@@ -465,60 +463,23 @@ class ParameterFit :
         #Other cognitive models
         #------------------------------------------
         elif parameter == 'inverse_temperature':
-            return {'inverse_temperature':(1, 64)}
+            return {'inverse_temperature':(16, 32)}
         #------------------------------------------
         # WSLS
         #------------------------------------------
         if parameter == 'go_drive':
             return {'go_drive':(0, 1)}
         if parameter == 'wsls_strength':
-            return {'wsls_strength':(0, 10)}
+            return {'wsls_strength':(0, 2)}
         #------------------------------------------
-        # PRW
+        # Error-driven
         #------------------------------------------
-        if parameter == 'initial_reward_estimate_go':
-            return {'initial_reward_estimate_go':(0, 1)}
-        if parameter == 'initial_reward_estimate_no_go':
-            return {'initial_reward_estimate_no_go':(0, 1)}
         if parameter == 'learning_rate':
             return {'learning_rate':(0, 1)}
-        #------------------------------------------
-        # ARW
-        #------------------------------------------
-        if parameter == 'initial_luft_estimate':
-            return {'initial_luft_estimate':(0, 1)}
-        if parameter == 'learning_rate':
-            return {'learning_rate':(0, 1)}
-        #------------------------------------------
-        # Qlearning
-        #------------------------------------------
-        if parameter == 'go_drive':
-            return {'go_drive':(0, 1)}
-        if parameter == 'discount_factor':
-            return {'discount_factor':(0, 1)}
-        if parameter == 'learning_rate':
-            return {'learning_rate':(0, 1)}
-        #------------------------------------------
-        # QAttendance
-        #------------------------------------------
-        if parameter == 'go_discount_factor':
-            return {'go_discount_factor':(0, 1)}
-        #------------------------------------------
-        # QFairness
-        #------------------------------------------
-        if parameter == 'fairness_bias':
-            return {'fairness_bias':(0, 1)}
-        #------------------------------------------
-        # MFP
-        #------------------------------------------
-        if parameter == 'belief_strength':
-            return {'belief_strength':(0, 1)}
-        elif parameter == 'alphas':
-            states = list(product([0,1], repeat=self.num_agents))
-            dict_alphas = {f'({x},{y})':(0, 1) for x in states for y in states}
-            return dict_alphas
-        # elif parameter == 'epsilon':
-        #     return {'epsilon':(0, 1)}
+        if parameter == 'bias':
+            return {'bias':(0, 1)}
+        if parameter == 'belief_bias':
+            return {'belief_bias':(1, 60)}
         else:
             raise Exception(f'Parameter {parameter} not known!')
 
