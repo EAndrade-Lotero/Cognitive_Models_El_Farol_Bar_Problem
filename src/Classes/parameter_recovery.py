@@ -463,7 +463,7 @@ class ParameterFit :
         #Other cognitive models
         #------------------------------------------
         elif parameter == 'inverse_temperature':
-            return {'inverse_temperature':(16, 32)}
+            return {'inverse_temperature':(4, 32)}
         #------------------------------------------
         # WSLS
         #------------------------------------------
@@ -478,8 +478,8 @@ class ParameterFit :
             return {'learning_rate':(0, 1)}
         if parameter == 'bias':
             return {'bias':(0, 1)}
-        if parameter == 'belief_bias':
-            return {'belief_bias':(1, 60)}
+        if parameter == 'belief_strength':
+            return {'belief_strength':(1, 100)}
         else:
             raise Exception(f'Parameter {parameter} not known!')
 

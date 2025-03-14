@@ -1025,7 +1025,8 @@ class MFPM1(CogMod) :
 		#--------------------------------------------
 		self.states = [0]
 		self.reset()
-		self.belief_bias = free_parameters['belief_bias']
+		self.belief_strength = free_parameters['belief_strength']
+		assert(self.belief_strength > 0)
 
 	def determine_action_preferences(self) -> List[float]:
 		'''
@@ -1058,8 +1059,8 @@ class MFPM1(CogMod) :
 			return 0
 		else:
 			prev_sate = self.get_prev_state()
-			numerator = self.count_bar_with_capacity(prev_sate) + self.belief_bias
-			denominator = self.count_states(prev_sate) + 2 * self.belief_bias
+			numerator = self.count_bar_with_capacity(prev_sate) + self.belief_strength
+			denominator = self.count_states(prev_sate) + 2 * self.belief_strength
 			prob_capacity = numerator / denominator
 			prob_crowded = 1 - prob_capacity
 			eu = prob_capacity - prob_crowded
@@ -1236,7 +1237,7 @@ free_parameters_error_driven_2 = {
 }
 free_parameters_MFP = {
 	'inverse_temperature':10,
-	'belief_bias': 10
+	'belief_strength': 10
 }
 
 MODELS = {
