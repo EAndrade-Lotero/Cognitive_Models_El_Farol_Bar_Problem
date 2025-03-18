@@ -283,6 +283,7 @@ class PlotVSMeasures:
 
     def __init__(self, data:pd.DataFrame) -> None:
         self.data = data
+        self.warnings = True
 
     def two_way_comparisons(
                 self, 
@@ -301,17 +302,43 @@ class PlotVSMeasures:
             'y_label':None
         }
         kwargs.update(kwargs_)
+        info_list = list()
+        measures = list()
         for idx, ax in enumerate(axes):
+            # Get pair of measures to plot
             pair_measures = measure_pairs[idx]
-            image_as_array = self.plot_vs(
+            # Add measures to list
+            if pair_measures[0] not in measures:
+                measures.append(pair_measures[0])
+            if pair_measures[1] not in measures:
+                measures.append(pair_measures[1])
+            # Get plot and plot's info
+            info = self.plot_vs(
                 pair_measures=pair_measures,
+                ax=ax,
                 file=None, kwargs=kwargs
             )
-            ax.axis('off')
-            ax.set_xlabel('OOOk')
-            ax.imshow(image_as_array)
-            # ax.set_xlabel(pair_measures[0])
+            info_list.append(info)
+        # Get max and min values for each measure
+        dict_max_min = dict()
+        for measure in measures:
+            min_m = min([
+                info[measure]['min'] for info in info_list if measure in info.keys()
+            ])
+            max_m = max([
+                info[measure]['max'] for info in info_list if measure in info.keys()
+            ])
+            min_m = min_m - 0.1*(max_m - min_m)
+            max_m = max_m + 0.1*(max_m - min_m)
+            dict_max_min[measure] = [min_m, max_m]
+        # Customize axes
+        for idx, ax in enumerate(axes):        
+            pair_measures = measure_pairs[idx]
+            ax.set_xlabel(pair_measures[0])
             ax.set_ylabel(pair_measures[1])
+            ax.set_xlim(dict_max_min[pair_measures[0]])
+            ax.set_ylim(dict_max_min[pair_measures[1]])
+        # Save plot
         plt.tight_layout()
         plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
         plt.close()
@@ -324,12 +351,13 @@ class PlotVSMeasures:
                 file:Optional[Union[Path, None]]=None,
                 kwargs:Optional[Dict[str,any]]={}
             ) -> Union[None, plt.axes]:
+        # Determine the number of rounds to plot
+        T = kwargs.get('T', 20)
         # Determine the number of model in data
         if 'only_value' in kwargs.keys():
             if kwargs['only_value']:
                 self.data.model = self.data.model.apply(lambda x: x.split('=')[-1])
         models = self.data.model.unique()
-        num_models = len(models)
         vs_models = True if len(models) > 1 else False
         # Record measure names
         measure1, measure2 = pair_measures
@@ -337,12 +365,17 @@ class PlotVSMeasures:
         assert(measure2 in self.standard_measures)
         measures = [measure1, measure2]
         # Measure on the given measures
-        T = kwargs.get('T', 20)
         gm = GetMeasurements(self.data, measures, T=T)
         df_measures = gm.get_measurements()
         # Jitter measures for better display
-        df_measures[measure1] += np.random.normal(0,0.025, len(df_measures[measure1]))
-        df_measures[measure2] += np.random.normal(0,0.025, len(df_measures[measure2]))
+        df_measures[measure1] += np.random.normal(0,0.0125, len(df_measures[measure1]))
+        df_measures[measure2] += np.random.normal(0,0.0125, len(df_measures[measure2]))
+        # Save extremes
+        info = dict()
+        for measure in measures:
+            info[measure] = dict()
+            info[measure]['min'] = df_measures[measure].min()
+            info[measure]['max'] = df_measures[measure].max()
         # Create the plot canvas
         if ax is None:
             fig, ax = plt.subplots(figsize=(self.width, self.height))
@@ -365,7 +398,7 @@ class PlotVSMeasures:
                 y=measure2,
                 hue='model',
                 style='model',
-                legend=False,
+                legend=True,
                 ax=ax
             )
         else:
@@ -391,12 +424,13 @@ class PlotVSMeasures:
             plt.close()
             print('Plot saved to', file)
         else:
-            print('Warning: No plot saved. To save plot, provide file name.')
-            fig.canvas.draw()
-            image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))  # Reshape to (H, W, 3)
-            return image
-
+            if self.warnings:
+                print('Warning: No plot saved. To save plot, provide file name.')
+            # fig.canvas.draw()
+            # image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            # image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))  # Reshape to (H, W, 3)
+            # return image
+        return info
 
 class PlotsAndMeasures :
     '''

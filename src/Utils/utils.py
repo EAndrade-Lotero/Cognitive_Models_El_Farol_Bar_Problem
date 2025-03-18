@@ -402,17 +402,18 @@ class GetMeasurements :
         # Keep only T last rounds
         #-----------------------------
         num_rounds = max(data["round"].unique())
-        self.data = pd.DataFrame(data[data["round"] >= num_rounds - T])
+        self.data = data
         #-----------------------------
         # Find columns to groupby		
         #-----------------------------
-        group_column = PPT.get_group_column(self.data.columns)
-        num_players_column = PPT.get_num_player_column(self.data.columns)
-        columns = ['model', 'treatment', 'threshold', group_column, num_players_column]
+        self.group_column = PPT.get_group_column(self.data.columns)
+        self.num_players_column = PPT.get_num_player_column(self.data.columns)
+        columns = ['model', 'treatment', 'threshold', self.group_column, self.num_players_column]
         if per_player:
-            player_column = PPT.get_player_column(self.data.columns)
-            columns.append(player_column)
+            self.player_column = PPT.get_player_column(self.data.columns)
+            columns.append(self.player_column)
         self.columns = [c for c in columns if c in self.data.columns]
+        self.keep_last_rounds()
 
     def get_measurements(self) -> pd.DataFrame:
         init = True
@@ -431,6 +432,12 @@ class GetMeasurements :
                     aux[measure] = (aux[measure]-aux[measure].mean())/aux[measure].std()
                 df = pd.merge(df, aux, on=self.columns, how='inner')
         return df			
+
+    def keep_last_rounds(self) -> None:
+        for key, grp in self.data.groupby(self.group_column):
+            num_rounds = max(grp["round"].unique())
+            grp = pd.DataFrame(grp[grp['round'] >= (num_rounds - self.T)]).reset_index(drop=True)
+            self.data.loc[grp.index, :] = grp
 
     @staticmethod
     def attendance(df: pd.DataFrame) -> float:
