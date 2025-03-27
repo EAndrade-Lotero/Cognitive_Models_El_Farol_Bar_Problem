@@ -1,4 +1,4 @@
-,Unnamed: 0.3,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,source,treatment,group,round,player,choice,score,attendance,ac_score,threshold,num_players,room,decision
+Unnamed: 0.4,Unnamed: 0.3,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,source,treatment,group,round,player,choice,score,attendance,ac_score,threshold,num_players,room,decision
 0,0,0,0,0,human,score + grid,Grupo-0001,1,405186428721292,0,0,1,25,0.5,2,Grupo-0001,0
 1,1,1,1,1,human,score + grid,Grupo-0001,1,728608683559397,1,1,1,25,0.5,2,Grupo-0001,1
 2,2,2,2,2,human,score + grid,Grupo-0001,2,405186428721292,1,1,1,25,0.5,2,Grupo-0001,1

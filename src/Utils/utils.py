@@ -44,6 +44,15 @@ class OrderStrings :
                     dict_order[x] = x
         return dict_order
 
+    @staticmethod
+    def add_number_if_repeated(name:str, names:List[str]) -> str:
+        if name not in names:
+            return name
+        counter = 1
+        while f'{name}_{counter}' in names:
+            counter += 1
+        return f'{name}_{counter}'
+
 
 class PPT :
     
@@ -94,7 +103,6 @@ class PPT :
         df.rename(columns=rename_dict, inplace=True)        
         return df
 
-
     @staticmethod
     def get_group_column(columns: List[str]) -> str:
         if 'id_sim' in columns:
@@ -143,7 +151,7 @@ class PPT :
         list_fixed = list()
         for num_p, threshold in pairs:
             fixed_params = {
-                'num_agents': num_p,
+                'num_agents': int(num_p),
                 'threshold': threshold
             }
             list_fixed.append(fixed_params)
@@ -158,7 +166,17 @@ class PPT :
                 print(num_ag, threshold, pairs)
                 raise Exception(e)
         return list_fixed
-
+    
+    @staticmethod
+    def get_number_of_groups(data: pd.DataFrame) -> List[int]:
+        num_players_col = PPT.get_num_player_column(data.columns)
+        group_column = PPT.get_group_column(data.columns)
+        list_sizes = list()
+        for key, grp in data.groupby([num_players_col, 'threshold']):
+            size = len(grp[group_column].unique())
+            group_size = {'num_episodes':size}
+            list_sizes.append(group_size)
+        return list_sizes
 
 class PathUtils :
         
@@ -220,6 +238,7 @@ class ConditionalEntropy :
         states = list()
         for round_, round_data in df.groupby('round'):
             state = round_data[self.decision_column].values
+            assert(len(state) == num_agents), f'{round_=}\n{round_data}'
             states.append(tuple(state))
         # Create a proxy dictionary
         all_states = list(product([0,1], repeat=num_agents))
@@ -390,6 +409,7 @@ class GetMeasurements :
                 measures: List[str],
                 normalize: Optional[bool]=False,
                 T: Optional[int]=20,
+                per_round: Optional[bool]=False,
                 per_player: Optional[bool]=False
             ) -> None:
         #-----------------------------
@@ -398,10 +418,6 @@ class GetMeasurements :
         self.measures = measures
         self.normalize = normalize
         self.T = T
-        #-----------------------------
-        # Keep only T last rounds
-        #-----------------------------
-        num_rounds = max(data["round"].unique())
         self.data = data
         #-----------------------------
         # Find columns to groupby		
@@ -409,13 +425,52 @@ class GetMeasurements :
         self.group_column = PPT.get_group_column(self.data.columns)
         self.num_players_column = PPT.get_num_player_column(self.data.columns)
         columns = ['model', 'treatment', 'threshold', self.group_column, self.num_players_column]
+        if per_round:
+            columns.append('round')
+        self.per_round = per_round
         if per_player:
             self.player_column = PPT.get_player_column(self.data.columns)
             columns.append(self.player_column)
         self.columns = [c for c in columns if c in self.data.columns]
+        #-----------------------------
+        # Keep only T last rounds
+        #-----------------------------
         self.keep_last_rounds()
 
     def get_measurements(self) -> pd.DataFrame:
+        if self.per_round:
+            return self.get_measurements_per_round()
+        else:
+            return self.get_measurements_all()
+
+    def get_measurements_per_round(self) -> pd.DataFrame:
+        init = True
+        for measure in self.measures:
+            variable = self.get_variable_from_measure(measure)
+            fun = eval(f'GetMeasurements.{measure}')
+            if init:
+                list_df = list()
+                for key, grp in self.data.groupby(self.columns):
+                    df = pd.DataFrame({variable: fun(grp)})
+                    df[self.columns] = key
+                    list_df.append(df)
+                df = pd.concat(list_df, ignore_index=True)
+                if self.normalize:
+                    df[variable] = (df[variable]-df[variable].mean())/df[variable].std()
+                init = False
+            else:
+                list_df = list()
+                for key, grp in self.data.groupby(self.columns):
+                    aux = pd.DataFrame({variable: fun(grp)})
+                    aux[self.columns] = key
+                    list_df.append(df)
+                aux = pd.concat(list_df, ignore_index=True)
+                if self.normalize:
+                    aux[variable] = (aux[variable]-aux[variable].mean())/aux[variable].std()
+                df = pd.merge(df, aux, on=self.columns, how='inner')
+        return df			
+
+    def get_measurements_all(self) -> pd.DataFrame:
         init = True
         for measure in self.measures:
             fun = eval(f'GetMeasurements.{measure}')
@@ -433,11 +488,19 @@ class GetMeasurements :
                 df = pd.merge(df, aux, on=self.columns, how='inner')
         return df			
 
+    def get_variable_from_measure(self, measure:str) -> str:
+        if measure == 'round_efficiency':
+            return 'efficiency'
+        if measure == 'round_conditional_entropy':
+            return 'conditional_entropy'
+    
     def keep_last_rounds(self) -> None:
+        df_list = list()
         for key, grp in self.data.groupby(self.group_column):
             num_rounds = max(grp["round"].unique())
-            grp = pd.DataFrame(grp[grp['round'] >= (num_rounds - self.T)]).reset_index(drop=True)
-            self.data.loc[grp.index, :] = grp
+            grp_aux = pd.DataFrame(grp[grp['round'] >= (num_rounds - self.T)]).reset_index(drop=True)
+            df_list.append(grp_aux)
+        self.data = pd.concat(df_list, ignore_index=True)
 
     @staticmethod
     def attendance(df: pd.DataFrame) -> float:
@@ -448,7 +511,12 @@ class GetMeasurements :
     @staticmethod
     def efficiency(df: pd.DataFrame) -> float:
         # assert(GetMeasurements.one_group_only(df))
-        return df.score.mean()
+        return df['score'].mean()
+
+    @staticmethod
+    def round_efficiency(df: pd.DataFrame) -> float:
+        # assert(GetMeasurements.one_group_only(df))
+        return df.groupby('round')['score'].mean()#.reset_index()
 
     @staticmethod
     def inequality(df: pd.DataFrame) -> float:
@@ -460,7 +528,7 @@ class GetMeasurements :
 
     @staticmethod
     def entropy(df: pd.DataFrame) -> float:
-        # assert(GetMeasurements.one_group_only(df))
+        assert(GetMeasurements.one_group_only(df))
         ge = ConditionalEntropy(df, T=np.infty)
         return ge.get_group_entropy(df)
 

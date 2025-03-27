@@ -478,6 +478,9 @@ class ParameterFit :
             return {'learning_rate':(0, 1)}
         if parameter == 'bias':
             return {'bias':(0, 1)}
+        #------------------------------------------
+        # MFP
+        #------------------------------------------
         if parameter == 'belief_strength':
             return {'belief_strength':(1, 100)}
         else:

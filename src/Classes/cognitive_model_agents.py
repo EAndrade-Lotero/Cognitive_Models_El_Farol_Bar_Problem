@@ -158,7 +158,7 @@ class CogMod () :
 		# To be defined by subclass
 		pass
 
-	def update(self, score:int, obs_state:tuple):
+	def update(self, score:int, obs_state:List[int]) -> None:
 		'''
 		Agent updates its model.
 		Input:
@@ -175,7 +175,7 @@ class CogMod () :
 			print(f'Error: action of type {type(action)}. Type int was expected. (previous actions: {self.decisions})')
 			raise Exception(e)
 		self.decisions.append(action)
-		self.prev_state_ = obs_state
+		self.prev_state_ = tuple(obs_state)
 
 	def reset(self):
 		'''
@@ -1219,7 +1219,12 @@ class MFPM3(MFPM1) :
 		self.reset()
 
 	def get_prev_state(self):
-		return self.prev_state_
+		assert(len(self.prev_state_) == self.num_agents)
+		if isinstance(self.prev_state_, list):
+			prev_state = tuple(self.prev_state_)
+		else:
+			prev_state = self.prev_state_
+		return prev_state
 
 	@staticmethod
 	def name():

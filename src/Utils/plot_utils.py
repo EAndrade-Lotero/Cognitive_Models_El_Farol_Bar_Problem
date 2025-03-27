@@ -34,8 +34,7 @@ from Utils.utils import (
     PathUtils,
     GetMeasurements,
     Grid
-)
-
+)        
 
 class PlotStandardMeasures :
     '''
@@ -72,10 +71,6 @@ class PlotStandardMeasures :
         '''
         DOCUMENTATION MISSING
         '''
-        non_standard_measures = set(measures).difference(self.standard_measures)
-        assert(len(non_standard_measures) == 0), f'Measures {non_standard_measures} cannot be ploted by this class.'
-        # Initialize output list
-        list_of_paths = list()
         # Tidy suffix
         if suffix is None:
             suffix = ''
@@ -84,10 +79,9 @@ class PlotStandardMeasures :
         # Tidy kwargs
         if kwargs is None:
             kwargs = dict()
+        # Determine the number of rounds to plot
         T = kwargs.get('T', 20)
         # Determine the number of model in data
-        # print(f'{self.data['model'].unique()=}')
-
         if 'only_value' in kwargs.keys():
             if kwargs['only_value']:
                 self.data.model = self.data.model.apply(lambda x: x.split('=')[-1])
@@ -110,15 +104,9 @@ class PlotStandardMeasures :
         kwargs['num_models'] = num_models
         kwargs['vs_models'] = vs_models
         # Obtain data
-        get_meas = GetMeasurements(
-            self.data, measures=measures, T=T)
-        data = get_meas.get_measurements()
-        ordered_models = OrderStrings.dict_as_numeric(data['model'].unique())
-        data['model'] = data['model'].map(ordered_models)
-        data.sort_values(by='model', inplace=True)
-        # print('-'*60)
-        # print(data)
-        # print('-'*60)
+        data = self.get_data(measures, T)
+        # Initialize output list
+        list_of_paths = list()
         # Plot per measure
         for m in measures:
             if folder is not None:
@@ -153,6 +141,7 @@ class PlotStandardMeasures :
         Output:
             - None.
         '''
+        assert(measure in self.standard_measures), f'Measure {measure} cannot be ploted by this class.'
         num_models = kwargs['num_models']
         vs_models = kwargs['vs_models']
         # Create the plot canvas
@@ -165,6 +154,7 @@ class PlotStandardMeasures :
             tight_layout=True
         )
         variable = measure
+        print(f'{vs_models=} --- {categorical=}')
         if vs_models:
             if not categorical:
                 lineplot(
@@ -174,7 +164,7 @@ class PlotStandardMeasures :
                     errorbar=('ci', 95)
                 )
             else:
-                violinplot(
+                boxplot(
                     x='model', y=variable, 
                     data=data, ax=ax, 
                 )
@@ -266,6 +256,112 @@ class PlotStandardMeasures :
             print('Plot saved to', file)
         plt.close()
 
+    def get_data(self, measures:List[str], T:int) -> pd.DataFrame:
+        get_meas = GetMeasurements(
+            self.data, measures=measures, T=T
+        )
+        data = get_meas.get_measurements()
+        ordered_models = OrderStrings.dict_as_numeric(data['model'].unique())
+        data['model'] = data['model'].map(ordered_models)
+        data.sort_values(by='model', inplace=True)
+        return data
+
+
+class PlotRoundMeasures(PlotStandardMeasures):
+    '''
+    Plot measures per round
+    '''
+    dpi = 300
+    extension = 'png'
+    width = 3
+    height = 3.5
+    cmaps = ["Blues", "Reds", "Greens", "Yellows"]
+    round_measures = [
+        'round_efficiency',
+        'round_conditional_entropy'
+    ]
+
+    def __init__(self, data:pd.DataFrame) -> None:
+        '''
+        Input:
+            - data, pandas dataframe
+        '''
+        super().__init__(data)
+
+    def get_data(self, measures, T):
+        get_meas = GetMeasurements(
+            self.data, measures=measures, T=T, per_round=True
+        )
+        data = get_meas.get_measurements()
+        ordered_models = OrderStrings.dict_as_numeric(data['model'].unique())
+        data['model'] = data['model'].map(ordered_models)
+        data.sort_values(by='model', inplace=True)
+        return data
+
+    def plot(
+                self, 
+                measure: str,
+                data: pd.DataFrame,
+                kwargs: Dict[str,any],
+                categorical: Optional[bool]=False,
+                file: Optional[Union[Path, None]]=None
+            ) -> Union[plt.axis, None]:
+        '''
+        Plots the variable vs round per model.
+        Input:
+            - measure: str with the name of the measure to plot.
+            - data: pandas dataframe with the data.
+            - kwargs: dict with additional setup values for plots
+            - file, path of the file to save the plot on.
+        Output:
+            - None or plt.axis.
+        '''
+        assert(measure in self.round_measures), f'Measure {measure} cannot be ploted by this class.'
+        num_models = kwargs['num_models']
+        vs_models = kwargs['vs_models']
+        # Create the plot canvas
+        if 'figsize' in kwargs.keys():
+            figsize = kwargs['figsize']
+        else:
+            figsize = (self.width * num_models, self.height)
+        fig, ax = plt.subplots(
+            figsize=figsize,
+            tight_layout=True
+        )
+        variable = self.get_variable_from_measure(measure)
+        if vs_models:
+            lineplot(
+                x='round', y=variable, 
+                hue='model',
+                data=data, ax=ax, 
+                errorbar=('ci', 95)
+            )
+        else:
+            lineplot(
+                x='round', y=variable, 
+                data=data, ax=ax, 
+                errorbar=('ci', 95)
+            )
+        ax.set_xlabel('Round')
+        ax.set_ylabel(variable)
+        # Set further information on plot
+        ax = PlotStandardMeasures._customize_ax(ax, kwargs)
+        # Save or return plot
+        if file is not None:
+            plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
+            print('Plot saved to', file)
+            plt.close()
+        else:
+            print('Warning: No plot saved by plot_efficiency. To save plot, provide file name.')
+            return ax
+        
+    def get_variable_from_measure(self, measure:str) -> str:
+        if measure == 'round_efficiency':
+            return 'efficiency'
+        if measure == 'round_conditional_entropy':
+            return 'conditional_entropy'
+
+
 class PlotVSMeasures:
     '''Plot 2D scatter plots'''
     dpi = 300
@@ -338,8 +434,16 @@ class PlotVSMeasures:
             ax.set_ylabel(pair_measures[1])
             ax.set_xlim(dict_max_min[pair_measures[0]])
             ax.set_ylim(dict_max_min[pair_measures[1]])
-        # Save plot
+            if idx == len(axes) - 1:
+                # Get legend handles/labels from the last axes
+                handles, labels = ax.get_legend_handles_labels()
+            ax.legend().remove()
+        # Place the legend below all subplots
+        fig.legend(handles, labels, loc='lower center', ncol=3, bbox_to_anchor=(0.5, -0.05))
+        # Adjust spacing to accommodate legend
+        fig.subplots_adjust(bottom=0.15)  # Add space for legend
         plt.tight_layout()
+        # Save plot
         plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
         plt.close()
         print('Plot saved to', file)
@@ -431,6 +535,7 @@ class PlotVSMeasures:
             # image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))  # Reshape to (H, W, 3)
             # return image
         return info
+
 
 class PlotsAndMeasures :
     '''

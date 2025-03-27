@@ -10,17 +10,16 @@ from tqdm.auto import tqdm
 from time import sleep
 from pathlib import Path
 from copy import deepcopy
-from itertools import product
 from random import seed, choices
 from IPython.display import clear_output
 from typing import List, Dict, Tuple, Union, Optional
 
 from Classes.bar import Bar
-from Utils.LaTeX_utils import PrintLaTeX
-from Classes.agent_utils import ProxyDict
-from Utils.plot_utils import PlotsAndMeasures, PlotStandardMeasures
-from Classes.cognitive_model_agents import *
 from Classes.agents import *
+from Classes.cognitive_model_agents import *
+from Utils.utils import OrderStrings, PathUtils
+from Utils.LaTeX_utils import PrintLaTeX
+from Utils.plot_utils import PlotStandardMeasures, PlotRoundMeasures
 
 
 class Episode :
@@ -148,9 +147,14 @@ class Episode :
                     * model: the model's name
         '''		
         data_frames= list()
+        list_sim_ids = list()
         # Run the number of episodes
         for t in tqdm(range(num_episodes), leave=False):
-            self.id = uuid.uuid1()			
+            id_ = uuid.uuid1()
+            id_ = OrderStrings.add_number_if_repeated(id_, list_sim_ids)
+            list_sim_ids.append(id_)
+            self.id = id_
+            # Reset agents for new episode			
             for agent in self.agents:
                 agent.reset()
             if verbose:
@@ -176,7 +180,6 @@ class Episode :
             clear_output(wait=True)
             self.environment.render(folder=folder)
             sleep(self.sleep_time)
-
 
 
 class Experiment :
@@ -371,7 +374,6 @@ class Experiment :
         self.data = pd.concat(df_list, ignore_index=True)
 
 
-
 class Performer :
 
     @staticmethod
@@ -486,7 +488,7 @@ class Performer :
                     )
                 measures_ = [m for m in measures if m != 'render']
                 if len(measures) > 0:
-                    p = PlotsAndMeasures(df)
+                    p = PlotStandardMeasures(df)
                     list_p = p.plot_measures(					
                         folder=image_folder,
                         measures=measures_,
@@ -494,7 +496,7 @@ class Performer :
                     )
                     list_images += list_p
         if data_folder is not None:
-            data_file = Path.joinpath(data_folder, f'{agent_class.name()}.csv')
+            data_file = PathUtils.add_file_name(data_folder, agent_class.name(), 'csv')
             df = pd.concat(df_list, ignore_index=True)
             df.to_csv(data_file)
             print(f'Data saved to {data_file}')
@@ -574,6 +576,7 @@ class Performer :
                 kwargs: Optional[Union[Dict[str, any], None]]=None
             ) -> None:
         df_list = list()
+        list_sim_ids = list()
         for dict_ in list_dicts:
             fixed_parameters = dict_['fixed_parameters']
             free_parameters = dict_['free_parameters']
@@ -615,20 +618,35 @@ class Performer :
             #-------------------------------
             # Run simulation
             #-------------------------------
-            df = episode.simulate(
+            df_ = episode.simulate(
                 num_episodes=num_episodes,
                 verbose=verbose
             )
-            df['model'] = f'{agent_class.name()}-{semilla}'
-            df_list.append(df)
+            name = f'{agent_class.name()}-{dict_["seed"]}'
+            name = OrderStrings.add_number_if_repeated(name, list_sim_ids)
+            list_sim_ids.append(name)
+            df_['model'] = name
+            df_list.append(df_)
         df = pd.concat(df_list, ignore_index=True)
-        p = PlotStandardMeasures(df)
-        list_images = p.plot_measures(					
-            folder=image_folder,
-            measures=measures,
-            kwargs=kwargs,
-            categorical=True
-        )
+        # Split between round measures and standard measures
+        round_measures = [m for m in measures if 'round' in m]
+        standard_measures = [m for m in measures if 'round' not in m]
+        if len(round_measures) > 0:
+            p = PlotRoundMeasures(df)
+            list_images = p.plot_measures(
+                measures=round_measures, 
+                folder=image_folder,
+                kwargs=kwargs
+            )
+        if len(standard_measures) > 0:
+            p = PlotStandardMeasures(df)
+            categorical = kwargs.get('categorical', True)
+            list_images = p.plot_measures(					
+                folder=image_folder,
+                measures=standard_measures,
+                kwargs=kwargs,
+                categorical=categorical
+            )
         #-------------------------------
         # Create latex string
         #-------------------------------

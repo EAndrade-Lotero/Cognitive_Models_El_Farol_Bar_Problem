@@ -236,7 +236,7 @@ class ParameterOptimization :
 		if parameter == 'go_prob':
 			return {'go_prob':(0, 1)}
 		#------------------------------------------
-		#Other cognitive models
+		# MFP and all other cognitive models
 		#------------------------------------------
 		elif parameter == 'inverse_temperature':
 			return {'inverse_temperature':(1, 64)}
@@ -272,13 +272,6 @@ class ParameterOptimization :
 			return {'discount_factor':(0, 1)}
 		if parameter == 'learning_rate':
 			return {'learning_rate':(0, 1)}
-		#------------------------------------------
-		# MFP
-		#------------------------------------------
-		if parameter == 'belief_strength':
-			return {'belief_strength':(0, 1)}
-		if parameter == 'epsilon':
-				return {'epsilon':(0, 1)}
 		else:
 			raise Exception(f'Parameter {parameter} not known!')
 
