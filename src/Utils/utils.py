@@ -178,6 +178,7 @@ class PPT :
             list_sizes.append(group_size)
         return list_sizes
 
+
 class PathUtils :
         
     @staticmethod
@@ -415,6 +416,8 @@ class GetMeasurements :
         #-----------------------------
         # Book keeping
         #-----------------------------
+        for measure in measures:
+            assert(measure in ['attendance', 'efficiency', 'inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
         self.measures = measures
         self.normalize = normalize
         self.T = T
@@ -548,7 +551,7 @@ class GetMeasurements :
         group_column = PPT.get_group_column(df.columns)
         groups = df[group_column].unique()
         return len(groups) == 1
-
+    
 
 class Grid:
     '''Creates a most compact grid and ravels and unravels'''

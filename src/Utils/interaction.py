@@ -128,7 +128,13 @@ class Episode :
         df["num_agents"] = self.environment.num_agents
         return df
     
-    def simulate(self, num_episodes:int=1, file:str=None, verbose:bool=False):
+    def simulate(
+                self, 
+                num_episodes:int=1, 
+                file:str=None, 
+                verbose:bool=False,
+                with_restart:Optional[bool]=True
+            ) -> pd.DataFrame:
         '''
         Runs a certain number of episodes.
         Input:
@@ -157,6 +163,8 @@ class Episode :
             # Reset agents for new episode			
             for agent in self.agents:
                 agent.reset()
+                if with_restart:
+                    agent.restart()
             if verbose:
                 print('\n' + '='*10 + f'Episode {t}' + '='*10 + '\n')
             # Reset environment for new episode
@@ -372,6 +380,75 @@ class Experiment :
                 df_list.append(df)
         # Concatenate dataframes
         self.data = pd.concat(df_list, ignore_index=True)
+
+    def changing_threshold(
+                self, \
+                values: List[float], \
+                folder_plots: Optional[str]=None,
+                file_data: Optional[str]=None,
+                kwargs: Optional[Dict[str,any]]={}
+                ) -> None:
+        # Get model name
+        name = kwargs.get('model_name', 'Simulation')
+        # Create simulation
+        episode = Episode(
+            environment=self.environment,\
+            agents=self.agents,\
+            model=name,\
+            num_rounds=self.num_rounds
+        )
+        # Creates list of dataframes
+        df_list= list()
+        # Create list of ascending and descending values
+        ordered_list = sorted(values)
+        inverse_list = list(reversed(ordered_list))   
+        list_values = ordered_list + inverse_list
+        middle = len(list_values) // 2
+        # Iterate over parameter values
+        i = -1
+        for value in tqdm(list_values, desc=f'Running models for each threshold'):
+            i += 1
+            # Set agent and bar threshold
+            self.environment.threshold = value
+            for agent in self.agents:
+                agent.threshold = value
+            # Run simulation
+            df = episode.simulate(
+                num_episodes=self.num_episodes, 
+                verbose=0,
+                with_restart=False
+            )
+            # Add model name to dataframe
+            df['model'] = f'{name}={value}'
+            if i < middle:
+                df['treatment'] = 'upwards'
+            else:
+                df['treatment'] = 'downwards'
+            # Append dataframe
+            df_list.append(df)
+        # Concatenate dataframes
+        self.data = pd.concat(df_list, ignore_index=True)
+        if file_data is not None:
+            self.data.to_csv(file_data, index=False)
+            print(f'Data saved to {file_data}')
+        # Create plot object
+        p = PlotStandardMeasures(self.data)
+        # Plot on each given measure
+        list_of_paths = p.plot_measures(
+            measures=self.measures,
+            folder=folder_plots,
+            kwargs=kwargs,
+            suffix='threshold',
+            categorical=True
+        )
+        free_parameters = self.agents[0].free_parameters
+        latex_string = PrintLaTeX.print_sweep(
+            parameters=free_parameters,
+            sweep_parameter='threshold',
+            values=values,
+            list_of_paths=list_of_paths
+        )
+        self.latex_string = latex_string
 
 
 class Performer :
@@ -724,3 +801,56 @@ class Performer :
             )
         elif image_folder is None or measures is not None:
             print('Warning: In order to save plots, both arguments "image_folder" and "measures" should be given.')
+
+    @staticmethod
+    def increase_threshold(
+                agent_class: CogMod,
+                fixed_parameters: Dict[str, any],
+                free_parameters: Dict[str, any],
+                simulation_parameters: Dict[str, any],
+                thresholds: List[float],
+                image_folder: Path,
+                measures: Optional[Union[List[str], None]]=None,
+                kwargs: Optional[Union[Dict[str, str], None]]=None,
+            ) -> None:
+        #-------------------------------
+        # Create experiment
+        #-------------------------------
+        if measures is None:
+            measures=[
+                'attendance', 
+                'deviation', 
+                'efficiency', 
+                'inequality', 
+                'conditional_entropy',
+                'entropy'
+            ]			
+        experiment = Experiment(
+            agent_class=agent_class,
+            fixed_parameters=fixed_parameters,
+            free_parameters=free_parameters,
+            simulation_parameters=simulation_parameters,
+            measures=measures
+        )
+        #-------------------------------
+        # Run sweep
+        #-------------------------------
+        kwargs_ = {
+            'x_label':'$\mu$',
+            'only_value':True,
+            'title_size':16,
+            'x_label_size':14,
+            'y_label_size':14,
+        }
+        if kwargs is not None:
+            kwargs_.update(kwargs)
+        experiment.changing_threshold(
+            values=thresholds,
+            folder_plots=image_folder,
+            kwargs=kwargs_
+        )
+        # Clean plot memory
+        plt.close()
+        return experiment.latex_string
+
+

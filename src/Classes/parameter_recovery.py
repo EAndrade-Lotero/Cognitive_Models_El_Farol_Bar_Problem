@@ -6,7 +6,7 @@ import pprint
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from itertools import product
+from types import MethodType
 from bayes_opt import BayesianOptimization
 from typing import (
 	List, Dict, Tuple,
@@ -50,7 +50,8 @@ class GetEpisodeLikelihood :
                 model: Agent, 
                 fixed_parameters: Dict[str, any],
                 free_parameters: Dict[str, any],
-                data: pd.DataFrame
+                data: pd.DataFrame,
+                agents: Optional[Union[Dict[int, Agent], None]]=None
             ) -> None:
         assert(hasattr(model, 'go_probability'))
         # Data bookkeeping
@@ -72,16 +73,19 @@ class GetEpisodeLikelihood :
         assert(len(thresholds) == 1), f"Invalid data: There should be just one threshold per episode, found {len(thresholds)}!" 
         self.episode_threshold = thresholds[0]
         # Model bookkeeping
-        self.model = model
         self.fixed_parameters = fixed_parameters
         self.free_parameters = free_parameters
-        self.agents = None
+        self.model = model
+        self.agents = agents
+        if agents is not None:
+            msg = f'Incorrect agent types:\n\t{[type(agent) for agent in agents.values()]}\n'
+            assert(np.all([isinstance(agent, model) for agent in agents.values()])), msg + f'Agents should be of type {model}'
         # Initialize log likelihoods
         self.log_likelihoods = {agent_number:0 for agent_number in self.agent_numbers}
         # For debugging
         self.debug = False
 
-    def get_episode_log_likelihoods(self) -> None:
+    def get_episode_likelihoods(self) -> None:
         '''
         Obtains the log likelihoods of the model given the data.
 
@@ -95,7 +99,7 @@ class GetEpisodeLikelihood :
         group_column = PPT.get_group_column(self.data.columns)
         num_episodes = len(episode_data[group_column].unique())
         assert(num_episodes == 1), f'Invalid data: {num_episodes} episodes where found but only one (1) is accepted!'
-        # Create agents from model and parameters
+        # Create or update agents from model and parameters
         self.initialize_agents()
         # Check integrity of rounds
         if self.debug:
@@ -159,7 +163,7 @@ class GetEpisodeLikelihood :
                 * threshold, float
         '''
         # Get log likelihood from data
-        self.get_episode_log_likelihoods()
+        self.get_episode_likelihoods()
         # Calculate deviance
         deviance = -2 * np.sum([self.log_likelihoods[id] for id in self.agent_numbers])
         dec_col = PPT.get_decision_column(self.data.columns)
@@ -180,6 +184,10 @@ class GetEpisodeLikelihood :
         # Checks if agents exist
         if self.agents is not None:
             for n, agent in self.agents.items():
+                agent.ingest_parameters(
+                    fixed_parameters=self.fixed_parameters,
+                    free_parameters=self.free_parameters
+                )
                 agent.reset()
             if self.debug:
                 print('Agents initialized for new episode!')
@@ -250,13 +258,15 @@ class GetDeviance:
                 self, 
                 model: Agent, 
                 free_parameters: Dict[str, any],
-                data: pd.DataFrame
+                data: pd.DataFrame,
+                with_treatment: Optional[bool]=False
             ) -> None:
         assert(hasattr(model, 'go_probability'))
         # Model bookkeeping
         self.model = model
         self.free_parameters = free_parameters
         self.agents = None
+        self.with_treatment = with_treatment
         # Data bookkeeping
         self.data = data
         self.process_log = {
@@ -268,56 +278,104 @@ class GetDeviance:
         # For debugging
         self.debug = False
 
+    def get_deviance_from_group(
+                self, 
+                free_parameters: Dict[str, any],
+                save: Optional[bool]=False
+            ) -> None:
+        # Get episodes id
+        group_column = PPT.get_group_column(self.data.columns)
+        groups = self.data[group_column].unique().tolist()
+        if self.debug:
+            print('Iterating over groups...')
+        # Bookkeeping
+        deviances = list()
+        for group in groups:
+            if self.debug:
+                print('\n' + '-'*50)
+                print(f'Calculating likelihood in group {group}')
+            group_data = self.data.groupby(group_column).get_group(group)
+            # Get the list of fixed parameters
+            list_fixed_parameters = PPT.get_fixed_parameters(group_data)
+            # Iterate over fixed parameters
+            initial = True
+            for fixed_parameters in list_fixed_parameters:
+                # If first episode for this group, initialize agents
+                if initial:
+                    player_column = PPT.get_player_column(self.data.columns)
+                    agents = {
+                        n:self.model(
+                            fixed_parameters=fixed_parameters, 
+                            free_parameters=free_parameters,
+                            n=i
+                        ) for i, n in enumerate(group_data[player_column].unique().tolist())
+                    }
+                    initial = False
+                # Filter data for this group and fixed parameters
+                num_players = int(fixed_parameters["num_agents"])
+                threshold = fixed_parameters["threshold"]
+                episode_data = group_data.groupby([PPT.get_num_player_column(self.data.columns), "threshold"]).get_group(tuple([num_players, threshold])).reset_index()
+                deviance_calculator = GetEpisodeLikelihood(
+                    model=self.model,
+                    fixed_parameters=fixed_parameters,
+                    free_parameters=free_parameters,
+                    data=episode_data,
+                    agents=agents
+                )
+                output_dict = deviance_calculator.get_deviance()
+                self.process_log['id'].append(group)
+                self.process_log['num_agents'].append(output_dict['num_agents'])
+                self.process_log['threshold'].append(output_dict['threshold'])
+                self.process_log['deviance'].append(output_dict['deviance'])
+                deviances.append(output_dict['deviance'])
+                if save:
+                    # Save to file
+                    if self.debug: print('Saving...')
+                    deviance_calculator.save_likelihoods()
+                    if self.debug: print('Done!')
+        if self.debug:
+            pprint.pp(self.process_log)
+        assert(np.all([not np.isnan(x) for x in deviances])), deviances
+        deviance = np.sum(deviances)
+        return deviance
+
     def get_deviance_from_data(
                 self, 
                 free_parameters: Dict[str, any],
                 save: Optional[bool]=False
             ) -> None:
         '''Get the parameters' likelihood given the data.'''
-        list_deviances = list()
-        list_fixed_parameters = self.get_params_list_from_data()
-        for fixed_parameters in list_fixed_parameters:
-            num_ag = int(fixed_parameters["num_agents"])
-            threshold = fixed_parameters["threshold"]
-            if self.debug:
-                print(f'Finding deviance for {num_ag} players and threshold {threshold}...')
-            num_agent_column = PPT.get_num_player_column(self.data.columns)
-            try:
-                df = self.data.groupby([num_agent_column, "threshold"]).get_group(tuple([num_ag, threshold])).reset_index()
-            except Exception as e:
-                print(tuple([num_ag, threshold]))
-                for key, grp in self.data.groupby([num_agent_column, "threshold"]):
-                    print('=>', key)
-                raise Exception(e)
-            deviance = self.get_deviance_given_parameters(
+        if self.with_treatment:
+            deviance = self.get_deviance_from_group(
                 free_parameters=free_parameters,
-                fixed_parameters=fixed_parameters, 
-                data=df
+                save=save
             )
-            list_deviances.append(deviance)
-        return sum(list_deviances)
-
-    def get_params_list_from_data(self) -> float:
-        '''Returns a list with tuples, each containing
-        fixed parameters and the corresponding group from the data'''
-        list_fixed_parameters = list()
-        params_list = PPT.get_fixed_parameters(self.data)
-        # if self.model == MFP:
-        #     for params in params_list:
-        #             states = list(product([0,1], repeat=int(params["num_agents"])))
-        #             count_states = ProxyDict(
-        #                 keys=states,
-        #                 initial_val=0
-        #             )
-        #             count_transitions = ProxyDict(
-        #                 keys=list(product(states, repeat=2)),
-        #                 initial_val=0
-        #             )
-        #             params["states"] = states
-        #             params["count_states"] = count_states
-        #             params["count_transitions"] = count_transitions
-        #             params["designated_agent"] = False
-        return params_list
+        else:
+            # Get the list of fixed parameters
+            list_deviances = list()
+            list_fixed_parameters = PPT.get_fixed_parameters(self.data)
+            # Iterate over fixed parameters
+            for fixed_parameters in list_fixed_parameters:
+                num_ag = int(fixed_parameters["num_agents"])
+                threshold = fixed_parameters["threshold"]
+                if self.debug:
+                    print(f'Finding deviance for {num_ag} players and threshold {threshold}...')
+                num_agent_column = PPT.get_num_player_column(self.data.columns)
+                try:
+                    df = self.data.groupby([num_agent_column, "threshold"]).get_group(tuple([num_ag, threshold])).reset_index()
+                except Exception as e:
+                    print(tuple([num_ag, threshold]))
+                    for key, grp in self.data.groupby([num_agent_column, "threshold"]):
+                        print('=>', key)
+                    raise Exception(e)
+                deviance = self.get_deviance_given_parameters(
+                    free_parameters=free_parameters,
+                    fixed_parameters=fixed_parameters, 
+                    data=df
+                )
+                list_deviances.append(deviance)
+                deviance = sum(list_deviances)
+        return deviance
 
     def get_deviance_given_parameters(
                 self, 
@@ -365,20 +423,17 @@ class GetDeviance:
         return deviance
 
     def create_deviance_function(self) -> Callable:
-        arguments = ', '.join([f'{key}=None' for key in self.free_parameters.keys()])
-        function_definition = f'''
-from types import MethodType
-        
-def def_funct(self, {arguments}):
-    parameters = locals()
-    # Return deviance
-    deviance = self.get_deviance_from_data(parameters)
-    return -deviance
+        def deviance_function(self, **kwargs):
+            # Set default values from free_parameters
+            for key, default in self.free_parameters.items():
+                kwargs.setdefault(key, default)
+            
+            # Compute and return negative deviance
+            deviance = self.get_deviance_from_data(kwargs)
+            return -deviance
 
-self.black_box_function = MethodType(def_funct, self)
-'''
-        # print(function_definition)
-        exec(function_definition)
+        # Bind the function as a method to the instance
+        self.black_box_function = MethodType(deviance_function, self)
 
 
 class ParameterFit :
@@ -404,19 +459,21 @@ class ParameterFit :
                 model_name: str, 
 				free_parameters: Dict[str, any],
                 data: pd.DataFrame, 
-                optimizer_name: Union[BayesianOptimization, None]
+                optimizer_name: Union[str, None],
+                with_treatment: Optional[bool]=False
             ) -> None:
         # Bookkeeping
         self.data = data
         self.free_parameters = free_parameters
         self.agent_class = agent_class
         self.model_name = model_name
+        self.with_treatment = with_treatment
         # Initialize optimizer
         self.optimizer_name = optimizer_name
         if optimizer_name == 'bayesian':
             self.optimizer = self.create_bayesian_optimizer()
         else:
-            raise Exception('Oooops')
+            raise NotImplementedError(f'Optimizer {optimizer_name} not implemented!')
 
     def get_optimal_parameters(
                 self,
@@ -433,7 +490,8 @@ class ParameterFit :
         pr = GetDeviance(
             model=self.agent_class,
             free_parameters=self.free_parameters,
-            data=self.data
+            data=self.data,
+            with_treatment=self.with_treatment
         )
         pr.create_deviance_function()
         # Bounded region of parameter space
@@ -452,7 +510,10 @@ class ParameterFit :
         )
         return optimizer
 
-    def get_saved_bounds(self, parameter:str) -> Tuple[float]:
+    def get_saved_bounds(
+                self, 
+                parameter:str,
+            ) -> Tuple[float]:
         '''Returns the known bounds for given parameter'''
         #------------------------------------------
         # Random
@@ -485,220 +546,4 @@ class ParameterFit :
             return {'belief_strength':(1, 100)}
         else:
             raise Exception(f'Parameter {parameter} not known!')
-
-
-# class GetEpisodeLikelihood :
-#     '''
-#     Class for obtaining the likelihood of a given model given some data.
-#     It assumes that only one episode is contained in the data.
-#     It detects the following from data:
-#         * number of players
-#         * bar's threshold
-
-#     Input:
-#         - agent_class, an agent class
-#         - model_name, the name of the model
-#         - data, a pandas dataframe with the columns id_sim, round, id_player, decision
-#     '''
-
-#     def __init__(self, agent_class, model_name:str, data:pd.DataFrame):
-#         self.agent_class = agent_class
-#         self.model_name = model_name
-#         self.data = data
-#         # Check that data contains only one episode
-#         num_episodes = len(self.data['id_sim'].unique())
-#         assert(num_episodes == 1), f'Invalid data: {num_episodes} episodes where found but only one (1) is accepted!'
-#         # Obtain player ids from data
-#         self.agent_numbers = data.id_player.unique().tolist()
-#         # Obtain number of players:
-#         self.num_agents = len(self.agent_numbers)
-#         # Obtain bar's threshold
-#         assert('threshold' in data.columns), f"Invalid data: It should contain a column with the bar's threshold!"
-#         thresholds = data['threshold'].unique().tolist()
-#         assert(len(thresholds) == 1), f"Invalid data: There should be just one threshold per episode, found {len(thresholds)}!" 
-#         self.episode_threshold = thresholds[0]
-
-#     def get_likelihood(self, parameters:dict) -> float:
-#         '''
-#         Obtains the likelihood of the parameters given the data.
-
-#         Input:
-#             - parameters (dict), a dictionary with the value of the parameters used by the class
-
-#         Output:
-#             - likelihood, float
-#         '''
-#         # Initialize agentes with given parameters
-#         self.initialize_agents(parameters)
-#         # Processes all rounds
-#         num_rounds = max(self.data['round'].unique()) + 1
-#         for _ in range(num_rounds):
-#             self.process_round()
-#         # -----------------------------------
-#         # # Initializes variable
-#         # likelihood = 1
-#         # # Iterates over agents
-#         # for id in self.agent_numbers:
-#         #     print(id, self.likelihoods[id])
-#         #     # Gets the likelihood per agent
-#         #     for i in range(1, len(self.likelihoods[id])): # Do not count first round
-#         #         p = self.likelihoods[id][i]
-#         #         likelihood *= p
-#         # -----------------------------------
-#         #  Vectorized version of previous iteration
-#         # -----------------------------------
-#         likelihood = np.product([np.product(self.likelihoods[id][1:]) for id in self.agent_numbers])
-#         return likelihood
-
-#     def get_deviance(self, parameters:dict) -> float:
-#         '''
-#         Obtains the deviance of the parameters given the data.
-
-#         Input:
-#             - parameters (dict), a dictionary with the value of the parameters used by the class
-
-#         Output:
-#             - deviance, float
-#         '''
-#         # Initialize agentes with given parameters
-#         self.initialize_agents(parameters)
-#         # Processes all rounds
-#         num_rounds = max(self.data['round'].unique()) + 1
-#         for _ in range(num_rounds):
-#             self.process_round()
-#         # -----------------------------------
-#         # # Initializes variable
-#         # deviance = 0
-#         # # Iterates over agents
-#         # for id in self.agent_numbers:
-#         #     # Gets the deviance per agent
-#         #     for i in range(1, len(self.likelihoods[id])): # Do not count first round
-#         #         p = self.likelihoods[id][i]
-#         #         deviance += np.log(p)
-#         # -----------------------------------
-#         #  Vectorized version of previous iteration
-#         # -----------------------------------
-#         deviance = np.sum([np.sum(np.log(self.likelihoods[id][1:])) for id in self.agent_numbers])
-#         return -2 * deviance
-
-#     def initialize_agents(self, parameters:dict):
-#         '''
-#         Initialize the agents with the given parameters
-
-#         Input:
-#             - parameters (dict), a dictionary with the value of the parameters 
-#                                  used to initialize each agent.
-#         '''
-#         self.parameters = parameters
-#         # Create list of agents with given parameters
-#         self.agents = [self.agent_class(id, self.parameters[id]) for id in self.agent_numbers]        
-#         # Initialize round counter
-#         self.round = 0
-#         # Initialize per agent data likelihoods 
-#         self.likelihoods = {id:[] for id in self.agent_numbers}
-
-#     def process_round(self):
-#         '''
-#         Process one round of the game in order to obtain the round's likelihoods.
-#         It performs the following steps:
-#             * Obtains the attendances from the data on the round stored in cache.
-#             * Gets the probability of each action for each agent. 
-#             * Updates the likelihood of the action performed by each agent.
-#             * Updates the agents with the data on the round stored in cache.
-#         '''
-#         # Get attendances
-#         attendances = self.data.groupby('round').get_group(self.round)["decision"].tolist()
-#         # Obtain the action probabilities for each agent
-#         action_probabilities = self.get_action_probabilities()
-#         # Update likelihoods
-#         for i, id in enumerate(self.agent_numbers):
-#             action = attendances[i]
-#             probability = action_probabilities[i]
-#             self.likelihoods[id].append(probability[action])
-#         # Update agents
-#         for agent in self.agents:
-#             agent.update(score=None, obs_state_=tuple(attendances))
-#         # Update round counter
-#         self.round += 1
-
-#     def get_action_probabilities(self):
-#         '''
-#         Obtains the probabilities of the actions for each agent
-#         given the data on the round stored in cache.
-
-#         Output:
-#             - action_probabilities, list with a list with the probability of each
-#                                     action for each agent
-#         '''
-#         # Initialize list that includes the action probabilities of all agents
-#         action_probabilities = []
-#         if self.round == 0:
-#             action_probabilities = [[0.5, 0.5] for _ in range(len(self.agents))]
-#         else:
-#             for agent in self.agents:
-#                 go_probability = agent.go_probability()
-#                 action_probabilities.append([1 - go_probability, go_probability])
-#         return action_probabilities
-
-
-
-# class PPT :
-
-#     @staticmethod
-#     def get_group_column(columns: List[str]) -> str:
-#         if 'id_sim' in columns:
-#             return 'id_sim'
-#         elif 'room' in columns:
-#             return 'room'
-#         elif 'group' in columns:
-#             return 'group'
-#         else:
-#             raise Exception(f'Error: No column data found. Should be one of "id_sim", "room", or "group".\nColumns found: {columns}')
-
-#     @staticmethod
-#     def get_player_column(columns: List[str]) -> str:
-#         if 'id_player' in columns:
-#             return 'id_player'
-#         elif 'player' in columns:
-#             return 'player'
-#         else:
-#             raise Exception(f'Error: No player data found. Should be one of "id_player" or "player".\nColumns found: {columns}')
-
-#     @staticmethod
-#     def get_num_player_column(columns: List[str]) -> str:
-#         if 'num_players' in columns:
-#             return 'num_players'
-#         elif 'num_agents' in columns:
-#             return 'num_agents'
-#         else:
-#             raise Exception(f'Error: No number of players column found. Should be one of "num_players" or "num_agents".\nColumns found: {columns}')
-
-#     @staticmethod
-#     def get_decision_column(columns: List[str]) -> str:
-#         if 'decision' in columns:
-#             return 'decision'
-#         elif 'choice' in columns:
-#             return 'choice'
-#         else:
-#             raise Exception(f'Error: No decision data found. Should be one of "decision" or "choice".\nColumns found: {columns}')
-
-#     @staticmethod
-#     def get_fixed_parameters(data: pd.DataFrame) -> List[int]:
-#         assert('threshold' in data.columns)
-#         num_players_col = PPT.get_num_player_column(data.columns)
-#         pairs = data[[num_players_col, 'threshold']].dropna().values.tolist()
-#         pairs = [tuple(x) for x in pairs]
-#         pairs = list(set(pairs))
-#         list_fixed = list()
-#         for num_p, threshold in pairs:
-#             if num_p > 2:
-#                 thres = threshold / num_p
-#             else:
-#                 thres = threshold
-#             fixed_params = {
-#                 'num_agents': int(num_p),
-#                 'threshold': round(float(thres), 2)
-#             }
-#             list_fixed.append(fixed_params)
-#         return list_fixed
 

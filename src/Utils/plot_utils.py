@@ -35,6 +35,8 @@ from Utils.utils import (
     GetMeasurements,
     Grid
 )        
+from Utils.indices import AlternationIndex
+
 
 class PlotStandardMeasures :
     '''
@@ -51,6 +53,7 @@ class PlotStandardMeasures :
         'inequality',
         'entropy',
         'conditional_entropy',
+        'alternation_index',
     ]
     
     def __init__(self, data:pd.DataFrame) -> None:
@@ -68,10 +71,7 @@ class PlotStandardMeasures :
                 categorical: Optional[bool]=False,
                 suffix: Optional[Union[None, str]]=None
             ) -> List[Path]:
-        '''
-        DOCUMENTATION MISSING
-        '''
-        # Tidy suffix
+        # Tid up suffix
         if suffix is None:
             suffix = ''
         else:
@@ -154,7 +154,13 @@ class PlotStandardMeasures :
             tight_layout=True
         )
         variable = measure
-        print(f'{vs_models=} --- {categorical=}')
+        if 'with_treatment' in kwargs.keys() and kwargs['with_treatment']:
+            if 'treatment' in data.columns:
+                hue = 'treatment'
+            else:
+                hue = None
+        else:
+            hue = None
         if vs_models:
             if not categorical:
                 lineplot(
@@ -166,6 +172,7 @@ class PlotStandardMeasures :
             else:
                 boxplot(
                     x='model', y=variable, 
+                    hue=hue,
                     data=data, ax=ax, 
                 )
             ax.set_xlabel('Model')
@@ -257,13 +264,22 @@ class PlotStandardMeasures :
         plt.close()
 
     def get_data(self, measures:List[str], T:int) -> pd.DataFrame:
+        # Check if alternation index is in measures
+        ai_dict = AlternationIndex.check_alternation_index_in_measures(measures)
+        # Get other measures
         get_meas = GetMeasurements(
-            self.data, measures=measures, T=T
+            self.data, 
+            measures=ai_dict['measures'], 
+            T=T
         )
         data = get_meas.get_measurements()
         ordered_models = OrderStrings.dict_as_numeric(data['model'].unique())
         data['model'] = data['model'].map(ordered_models)
         data.sort_values(by='model', inplace=True)
+        # Add alternation index
+        if ai_dict['check']:
+            ai = AlternationIndex.from_file(priority='statsmodels')
+            data['alternation_index'] = ai(data)
         return data
 
 
@@ -472,8 +488,9 @@ class PlotVSMeasures:
         gm = GetMeasurements(self.data, measures, T=T)
         df_measures = gm.get_measurements()
         # Jitter measures for better display
-        df_measures[measure1] += np.random.normal(0,0.0125, len(df_measures[measure1]))
-        df_measures[measure2] += np.random.normal(0,0.0125, len(df_measures[measure2]))
+        sigma = 0.001
+        df_measures[measure1] += np.random.normal(0,sigma, len(df_measures[measure1]))
+        df_measures[measure2] += np.random.normal(0,sigma, len(df_measures[measure2]))
         # Save extremes
         info = dict()
         for measure in measures:

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from tqdm.auto import tqdm
 from itertools import permutations
 from typing import Optional, Union, Tuple
 
@@ -34,7 +35,7 @@ class CherryPickEquilibria:
     def generate_data(self, kind:str) -> pd.DataFrame:
         assert(kind in ['segmentation', 'alternation', 'random'])
         df_list = list()
-        for i in range(self.num_episodes):
+        for i in tqdm(range(self.num_episodes), desc='Running episodes', leave=False):
             if kind == 'segmentation':
                 df = self.generate_segmentation_simulation()
             elif kind == 'alternation':

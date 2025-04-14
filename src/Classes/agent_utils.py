@@ -30,7 +30,10 @@ class ProxyDict :
         self.data_dict = {key:self.initial_val for key in self._keys}
 
     def __call__(self, key: List[int]) -> float:
-        return self.data_dict[key]
+        try:
+            return self.data_dict[key]
+        except KeyError:
+            raise KeyError(f'Key {key} not found in ProxyDict. Available keys are: {self.keys()}')
 
     def update(self, key: List[int], new_value: any) -> None:
         self.data_dict[key] = new_value

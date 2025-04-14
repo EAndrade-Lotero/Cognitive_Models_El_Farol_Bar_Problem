@@ -35,12 +35,7 @@ class CogMod () :
 		#----------------------
 		# Parameter bookkeeping
 		#----------------------
-		self.fixed_parameters = fixed_parameters
-		self.free_parameters = free_parameters
-		self.threshold = fixed_parameters["threshold"]
-		self.num_agents = int(fixed_parameters["num_agents"])
-		if "inverse_temperature" in free_parameters:
-			self.inverse_temperature = free_parameters["inverse_temperature"]
+		self.ingest_parameters(fixed_parameters, free_parameters)
 		#----------------------
 		# Dealing with softmax overflow
 		#----------------------
@@ -177,13 +172,17 @@ class CogMod () :
 		self.decisions.append(action)
 		self.prev_state_ = tuple(obs_state)
 
-	def reset(self):
+	def reset(self) -> None:
 		'''
 		Restarts the agent's data for a new trial.
 		'''
 		self.decisions = []
 		self.scores = []
 		self.prev_state_ = None
+
+	def restart(self) -> None:
+		# To be defined by subclass
+		pass
 
 	def print_agent(self, ronda:int=None) -> str:
 			'''
@@ -207,6 +206,24 @@ class CogMod () :
 			except:
 				score = "nan"
 			print(f"No.agent:{self.number}, Decision:{decision}, Score:{score}")
+
+	def ingest_parameters(
+				self, 
+				fixed_parameters:Dict[str,any], 
+				free_parameters:Dict[str,any]
+			) -> None:
+		'''
+		Ingests parameters from the model.
+		Input:
+			- fixed_parameters, dictionary with fixed parameters
+			- free_parameters, dictionary with free parameters
+		'''
+		self.fixed_parameters = fixed_parameters
+		self.free_parameters = free_parameters
+		self.threshold = fixed_parameters["threshold"]
+		self.num_agents = int(fixed_parameters["num_agents"])
+		if "inverse_temperature" in free_parameters:
+			self.inverse_temperature = free_parameters["inverse_temperature"]
 
 	@staticmethod
 	def name():
@@ -282,6 +299,161 @@ class Random(CogMod) :
 		return 'Random'
 
 
+class RandomM1(CogMod) :
+	'''
+	Implements a random rule of go/no go with probability given by go_prob.
+	'''
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		#--------------------------------------------
+		# Create counters
+		#--------------------------------------------
+		self.states = np.array([0])
+		self.restart()
+		#----------------------
+		# Bookkeeping for model parameters
+		#----------------------
+		self.ingest_parameters(fixed_parameters, free_parameters)
+
+	def ingest_parameters(
+				self, 
+				fixed_parameters:Dict[str,any], 
+				free_parameters:Dict[str,any]
+			) -> None:
+		super().ingest_parameters(fixed_parameters, free_parameters)
+		self.go_prob = np.zeros(self.states.shape)
+		for state in self.states:
+			self.go_prob[state] = free_parameters[f"go_prob_{state}"]
+
+	def make_decision(self) -> int:
+		'''
+		Agent decides whether to go to the bar or not.
+		Output:
+			- A decision 0 or 1
+		'''
+		go_prob = self.go_probability()
+		return 1 if uniform(0, 1) < go_prob else 0
+	
+	def go_probability(self):
+		'''
+		Agent returns the probability of going to the bar
+		according to its model.
+		Output:
+			- p, float representing the probability that the
+				agent goes to the bar.
+		'''
+		return self.go_prob[self.prev_state_]
+
+	def update(self, score:int, obs_state:List[int]) -> None:
+		self.prev_state_ = 0
+
+	def __str__(self) -> str:
+			'''
+			Returns a string with the state of the agent on a given round.
+			Input:
+				- ronda, integer with the number of the round.
+			Output:
+				- string with a representation of the agent at given round.
+			'''
+			try:
+				ronda = len(self.decisions) - 1
+			except:
+				ronda = 0
+			try:
+				decision = self.decisions[ronda]
+			except:
+				decision = "nan"
+			try:
+				score = self.scores[ronda]
+			except:
+				score = "nan"
+			return f"No.agent:{self.number}, go_prob:{self.go_prob}\nDecision:{decision}, Score:{score}"
+
+	@staticmethod
+	def name():
+		return 'Random-M1'
+
+
+class RandomM2(RandomM1) :
+	'''
+	Implements a random rule of go/no go with probability given by go_prob.
+	This models conditions the probability on the previous action and aggregate state.
+	'''
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		#--------------------------------------------
+		# Create counters
+		#--------------------------------------------
+		self.states = list(product([0, 1], np.arange(self.num_agents)))
+		self.restart()
+		#----------------------
+		# Bookkeeping for model parameters
+		#----------------------
+		self.ingest_parameters(fixed_parameters, free_parameters)
+
+	def update(self, score:int, obs_state:List[int]) -> None:
+		action = obs_state[self.number]
+		attendance_others = np.sum(obs_state) - action
+		self.prev_state_ = (action, attendance_others)
+
+
+class RandomM3(RandomM1) :
+	'''
+	Implements a random rule of go/no go with probability given by go_prob.
+	This models conditions the probability on the previous actions vector, the full-state.
+	'''
+	def __init__(
+				self, 
+				free_parameters:Optional[Dict[str,any]]={}, 
+				fixed_parameters:Optional[Dict[str,any]]={}, 
+				n:Optional[int]=1
+			) -> None:
+		#----------------------
+		# Initialize superclass
+		#----------------------
+		super().__init__(
+			free_parameters=free_parameters, 
+			fixed_parameters=fixed_parameters, 
+			n=n
+		)
+		#--------------------------------------------
+		# Create counters
+		#--------------------------------------------
+		self.states = list(product([0, 1], repeat=self.num_agents))
+		self.restart()
+		#----------------------
+		# Bookkeeping for model parameters
+		#----------------------
+		self.ingest_parameters(fixed_parameters, free_parameters)
+
+	def update(self, score:int, obs_state:List[int]) -> None:
+		self.prev_state_ = tuple(obs_state)
+
+
 class WSLS(CogMod) :
 	'''
 	Defines the model of go drive plus Win-Stay, Lose-Shift.
@@ -304,6 +476,14 @@ class WSLS(CogMod) :
 		#----------------------
 		# Bookkeeping for model parameters
 		#----------------------
+		self.ingest_parameters(fixed_parameters, free_parameters)
+
+	def ingest_parameters(
+				self, 
+				fixed_parameters:Dict[str,any], 
+				free_parameters:Dict[str,any]
+			) -> None:
+		super().ingest_parameters(fixed_parameters, free_parameters)		
 		self.go_drive = free_parameters["go_drive"]
 		self.wsls_strength = free_parameters["wsls_strength"]
 
@@ -353,14 +533,22 @@ class PayoffM1(CogMod) :
 			n=n
 		)
 		#----------------------
-		# Bookkeeping for model parameters
-		#----------------------
-		self.learning_rate = free_parameters["learning_rate"]
-		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
 		self.backup_Q = np.zeros(2)
 		self.Q = deepcopy(self.backup_Q)
+		#----------------------
+		# Bookkeeping for model parameters
+		#----------------------
+		self.ingest_parameters(fixed_parameters, free_parameters)
+
+	def ingest_parameters(
+				self, 
+				fixed_parameters:Dict[str,any], 
+				free_parameters:Dict[str,any]
+			) -> None:
+		super().ingest_parameters(fixed_parameters, free_parameters)
+		self.learning_rate = free_parameters["learning_rate"]
 
 	def determine_action_preferences(self) -> List[float]:
 		'''
@@ -427,6 +615,9 @@ class PayoffM1(CogMod) :
 
 	def reset(self) -> None:
 		super().reset()
+
+	def restart(self) -> None:
+		super().reset()
 		self.Q = deepcopy(self.backup_Q)
 
 	@staticmethod
@@ -454,10 +645,6 @@ class PayoffM2(PayoffM1) :
 			fixed_parameters=fixed_parameters, 
 			n=n
 		)
-		#----------------------
-		# Bookkeeping for model parameters
-		#----------------------
-		self.learning_rate = free_parameters["learning_rate"]
 		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
@@ -546,10 +733,6 @@ class PayoffM3(PayoffM1) :
 			fixed_parameters=fixed_parameters, 
 			n=n
 		)
-		#----------------------
-		# Bookkeeping for model parameters
-		#----------------------
-		self.learning_rate = free_parameters["learning_rate"]
 		#----------------------
 		# Bookkeeping for go preference
 		#----------------------
@@ -1024,7 +1207,18 @@ class MFPM1(CogMod) :
 		# Create counters
 		#--------------------------------------------
 		self.states = [0]
-		self.reset()
+		self.restart()
+		#----------------------
+		# Bookkeeping for model parameters
+		#----------------------
+		self.ingest_parameters(fixed_parameters, free_parameters)
+
+	def ingest_parameters(
+				self, 
+				fixed_parameters:Dict[str,any], 
+				free_parameters:Dict[str,any]
+			) -> None:
+		super().ingest_parameters(fixed_parameters, free_parameters)
 		self.belief_strength = free_parameters['belief_strength']
 		assert(self.belief_strength > 0)
 
@@ -1118,6 +1312,12 @@ class MFPM1(CogMod) :
 		'''
 		super().reset()
 		self.prev_state_ = None
+
+	def restart(self) -> None:
+		'''
+		Restarts the agent memory.
+		'''
+		self.reset()
 		self.count_states = ProxyDict(keys=self.states, initial_val=0)
 		self.count_bar_with_capacity = ProxyDict(
 			keys=self.states,
@@ -1180,7 +1380,7 @@ class MFPM2(MFPM1) :
 			n=n
 		)
 		self.states = list(product([0, 1], np.arange(self.num_agents)))
-		self.reset()
+		self.restart()
 
 	def get_prev_state(self):
 		assert(self.prev_state_ is not None)
@@ -1216,7 +1416,7 @@ class MFPM3(MFPM1) :
 			n=n
 		)
 		self.states = list(product([0, 1], repeat=self.num_agents))
-		self.reset()
+		self.restart()
 
 	def get_prev_state(self):
 		assert(len(self.prev_state_) == self.num_agents)
@@ -1251,6 +1451,23 @@ MODELS = {
 		'free_parameters': {
 			'go_prob':0,
 		}
+	# 'Random-M1': {
+	# 	'class': RandomM1,
+	# 	'free_parameters': {
+	# 		'go_prob_1':0,
+	# 	}
+	# }, 
+	# 'Random-M2': {
+	# 	'class': RandomM2,
+	# 	'free_parameters': {
+	# 		'go_prob_2':0,
+	# 	}
+	# }, 
+	# 'Random-M3': {
+	# 	'class': RandomM3,
+	# 	'free_parameters': {
+	# 		'go_prob_3':0,
+	# 	}
 	}, 
 	'WSLS': {
 		'class': WSLS, 
