@@ -26,30 +26,27 @@ class AlternationIndex:
                 max_epsilon: Optional[float]=0.025,
                 seed: Optional[Union[int, None]]=None
             ) -> None:
-        range_num_agents = np.linspace(2, max_agents, 100)
-        range_threshold = np.linspace(0, 1, 100)
-        range_epsilon = np.linspace(0, max_epsilon, 100)
-        configurations = list(product(range_num_agents, range_threshold, range_epsilon))
+        self.num_points = num_points
+        self.max_agents = max_agents
+        self.max_epsilon = max_epsilon
         self.num_episodes = num_episodes
         self.seed = seed
         self.rng = np.random.default_rng(seed=seed)
-        self.configuration_points = self.rng.choice(
-            configurations, size=num_points, replace=False
-        )
-        self.measures = ['efficiency', 'entropy', 'conditional_entropy', 'inequality']
+        self.configuration_points = self.create_configurations()
+        self.measures = ['normalized_efficiency', 'entropy', 'conditional_entropy', 'inequality']
         self.data = None
         self.sklearn_coefficients = None
         self.statsmodels_coefficients = None
         self.coefficients = None
         self.index_path = PATHS['index_path']
-        self.priority = 'sklearn'
+        self.priority = 'statsmodels'
         self.debug = True
 
     def __call__(self, df:pd.DataFrame) -> float:
         '''Calculate the index from the dataframe'''
         if self.coefficients is None:
             self.create_index_calculator()
-        assert('efficiency' in df.columns)
+        assert('normalized_efficiency' in df.columns)
         assert('entropy' in df.columns)
         assert('conditional_entropy' in df.columns)
         assert('inequality' in df.columns)
@@ -98,9 +95,6 @@ class AlternationIndex:
         # Predict and evaluate
         y_pred = clf.predict(X_test)
         print(classification_report(y_test, y_pred))
-        print(['intercept'] + self.measures)
-        print(clf.intercept_ + clf.coef_.tolist()[0])
-        print(clf.coef_.tolist()[0])
         df_index = pd.DataFrame({
             'measure': ['intercept'] + self.measures,
             'coefficient': clf.intercept_.tolist() + clf.coef_[0].tolist()
@@ -151,6 +145,7 @@ class AlternationIndex:
         df = pd.concat(df_list, ignore_index=True)
         df['num_agents'] = df['num_agents'].astype(int)
         df['threshold'] = df['threshold'].astype(float)
+        self.data = df
         return df
     
     def simulate_data_kind(self, data_type:str) -> pd.DataFrame:
@@ -169,8 +164,13 @@ class AlternationIndex:
             )
             eq_generator.debug = False
             df_alternation = eq_generator.generate_data(data_type)
-            get_m = GetMeasurements(df_alternation, self.measures)
+            get_m = GetMeasurements(
+                data=df_alternation, 
+                measures=self.measures,
+                normalize=False,
+            )
             df = get_m.get_measurements() 
+            df['epsilon'] = epsilon
             df_list.append(df)
         df = pd.concat(df_list, ignore_index=True)
         return df
@@ -200,7 +200,7 @@ class AlternationIndex:
         if 'alternation_index' in measures_:
             index = measures_.index('alternation_index')
             measures_.pop(index)
-            measures_ += ['efficiency', 'inequality', 'entropy', 'conditional_entropy']
+            measures_ += ['normalized_efficiency', 'inequality', 'entropy', 'conditional_entropy']
             measures_ = list(set(measures_))
             check = True
         else:
@@ -210,3 +210,19 @@ class AlternationIndex:
             'check': check 
         }
         return dict_check
+    
+    def create_configurations(self):
+        range_epsilon = np.linspace(0, self.max_epsilon, 10)
+        range_num_agents = list(set(np.linspace(2, self.max_agents, 10)))
+        pairs = product(range_num_agents, range_epsilon)
+        configurations = list()
+        for num_agents, epsilon in pairs:
+            num_agents = int(num_agents)
+            for B in range(1, num_agents):
+                triplet = (num_agents, B / num_agents, epsilon)
+                configurations.append(triplet)
+        if len(configurations) >= self.num_points:
+            configurations = self.rng.choice(configurations, size=self.num_points, replace=False)
+        else:
+            print('Warning: Not enough configurations, using all')
+        return configurations

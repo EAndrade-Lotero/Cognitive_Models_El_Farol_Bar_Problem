@@ -21,10 +21,12 @@ class CherryPickEquilibria:
             ) -> None:
         self.num_agents = num_agents
         self.agents = list(range(self.num_agents))
-        assert(0 <= threshold <= 1)
+        assert(0 <= threshold <= 1), f'The threshold must be between 0 and 1 but got {threshold}'
         self.threshold = threshold
         self.B = int(num_agents * threshold)
-        assert(0 <= epsilon <= 1)
+        assert(0 <= epsilon <= 1), f'The epsilon must be between 0 and 1 but got {epsilon}'
+        assert(num_rounds > 0), f'The number of rounds must be positive but got {num_rounds}'
+        assert(num_episodes > 0), f'The number of episodes must be positive but got {num_episodes}'
         self.epsilon = epsilon
         self.num_rounds = num_rounds
         self.num_episodes = num_episodes

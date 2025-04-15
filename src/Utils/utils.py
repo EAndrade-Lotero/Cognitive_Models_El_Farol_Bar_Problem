@@ -417,7 +417,7 @@ class GetMeasurements :
         # Book keeping
         #-----------------------------
         for measure in measures:
-            assert(measure in ['attendance', 'efficiency', 'inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
+            assert(measure in ['attendance', 'efficiency', 'normalized_efficiency', 'inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
         self.measures = measures
         self.normalize = normalize
         self.T = T
@@ -515,6 +515,14 @@ class GetMeasurements :
     def efficiency(df: pd.DataFrame) -> float:
         # assert(GetMeasurements.one_group_only(df))
         return df['score'].mean()
+
+    @staticmethod
+    def normalized_efficiency(df: pd.DataFrame) -> float:
+        # assert(GetMeasurements.one_group_only(df))
+        threshold = df['threshold'].mean()
+        if threshold == 0:
+            threshold = 1e-3
+        return df['score'].mean() / threshold
 
     @staticmethod
     def round_efficiency(df: pd.DataFrame) -> float:
