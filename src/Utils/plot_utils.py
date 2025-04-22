@@ -47,13 +47,20 @@ class PlotStandardMeasures :
     width = 3
     height = 3.5
     cmaps = ["Blues", "Reds", "Greens", "Yellows"]
+    regular_measures = [
+        'attendance',
+        'efficiency', 
+        'inequality',
+        'entropy',
+        'conditional_entropy',
+    ]
     standard_measures = [
         'attendance',
         'efficiency', 
         'inequality',
         'entropy',
         'conditional_entropy',
-        'alternation_index',
+        'alternation_index'
     ]
     
     def __init__(self, data:pd.DataFrame) -> None:
@@ -236,11 +243,16 @@ class PlotStandardMeasures :
         if T is None:
             T = 20
         annot = kwargs.get('annot', False)
+        # If measure is alternation index, need to get more measures
+        to_measure = AlternationIndex.complete_measures([measure])
         # Obtain data
         get_meas = GetMeasurements(
-            self.data, measures=[measure], T=T)
+            self.data, measures=to_measure, T=T)
         get_meas.columns += [parameter2, parameter1]
         df = get_meas.get_measurements()
+        if measure == 'alternation_index':
+            index_gen = AlternationIndex.from_file()
+            df['alternation_index'] = index_gen(df)
         df = df.groupby([parameter2, parameter1])[measure].mean().reset_index()
         values1 = df[parameter1].unique()
         values2 = df[parameter2].unique()

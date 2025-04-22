@@ -67,7 +67,8 @@ class CherryPickEquilibria:
     
     def generate_random_simulation(self) -> pd.DataFrame:
         # Generate go array
-        go_array = self.rng.integers(low=0, high=2, size=(self.num_agents, self.num_rounds))
+        # go_array = self.rng.integers(low=0, high=2, size=(self.num_agents, self.num_rounds))
+        go_array = (self.rng.random((self.num_agents, self.num_rounds)) < self.threshold).astype(int)
         # Generate dataframe
         df = self.generate_dataframe(go_array)
         return df

@@ -474,6 +474,7 @@ class GetMeasurements :
         return df			
 
     def get_measurements_all(self) -> pd.DataFrame:
+        assert(len(self.measures) > 0)
         init = True
         for measure in self.measures:
             fun = eval(f'GetMeasurements.{measure}')

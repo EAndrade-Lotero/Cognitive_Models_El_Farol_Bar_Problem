@@ -35,6 +35,15 @@ class ProxyDict :
         except KeyError:
             raise KeyError(f'Key {key} not found in ProxyDict. Available keys are: {self.keys()}')
 
+    def __getitem__(self, key: List[int]) -> float:
+        try:
+            return self.data_dict[key]
+        except KeyError:
+            raise KeyError(f'Key {key} not found in ProxyDict. Available keys are: {self.keys()}')
+
+    def __setitem__(self, key: List[int], value:any) -> None:
+        self.update(key, value)
+
     def update(self, key: List[int], new_value: any) -> None:
         self.data_dict[key] = new_value
 
@@ -67,6 +76,7 @@ class ProxyDict :
         table = PrettyTable(field_names=list(self.data_dict.keys()))
         row = [round(value, self.round_dec) for value in self.data_dict.values()]
         table.add_row(row)
+        print(table)
         return str(table)
 
 

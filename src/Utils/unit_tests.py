@@ -47,14 +47,47 @@ def rollout(agent:CogMod, other_player_actions:int, num_rounds:int) -> None:
     state = agent.prev_state_
     for i in range(num_rounds):
         print(f'---------- Round {i} ----------')
-        preferences = agent.determine_action_preferences()
+        try:
+            preferences = agent.determine_action_preferences()
+        except Exception as e:
+            print('')
+            print(DASH_LINE)
+            print("Error finding agent's preferences")
+            print(e)
+            print_agent(agent)
+            raise Exception(e)
         print(f'Action preferences in state {state}: {preferences}')
-        action = agent.make_decision()
+        try:
+            action = agent.make_decision()
+        except Exception as e:
+            print('')
+            print(DASH_LINE)
+            print("Error determining next action")
+            print(e)
+            print_agent(agent)
+            raise Exception(e)
         print('Chosen action:', action)
         other_player_action = other_player_actions[i]
         new_state = [action, other_player_action]
         print('State arrived:', new_state)
         payoff = agent.payoff(action, new_state)
         print(f'Payoff action {action}: {payoff}')
-        agent.update(payoff, new_state)
+        try:
+            agent.update(payoff, new_state)
+        except Exception as e:
+            print('')
+            print(DASH_LINE)
+            print("Error updating agent")
+            print(e)
+            print_agent(agent)
+            raise Exception(e)
         state = new_state
+
+def print_agent(agent:CogMod) -> str:
+    print(str(agent))
+    print(f'{agent.free_parameters=}')
+    if hasattr(agent, 'av_payoff'):
+        print(f'{agent.av_payoff=}')
+    if hasattr(agent, 'count_states'):
+        print("Agent's count_states:")
+        print(agent.count_states)

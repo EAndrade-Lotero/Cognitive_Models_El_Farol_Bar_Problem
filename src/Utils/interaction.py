@@ -294,8 +294,12 @@ class Experiment :
                 # Iterate over agents
                 for agent_ in self.agents:
                     # Modify agent's parameter with value
-                    instruction = f'agent_.{parameter} = {value}'
-                    exec(instruction)
+                    free_parameters_ = self.free_parameters.copy()
+                    free_parameters_[parameter] = value
+                    agent_.ingest_parameters(
+                        fixed_parameters=self.fixed_parameters, 
+                        free_parameters=free_parameters_
+                    )
             # Create name
             name = f'{parameter}={value}'
             # Create simulation
@@ -485,7 +489,7 @@ class Performer :
         episode = Episode(
             environment=bar,\
             agents=agents,\
-            model='MFP',\
+            model=agent_class.name,\
             num_rounds=num_rounds
         )
         #-------------------------------
@@ -564,7 +568,7 @@ class Performer :
                         num_rounds=10
                     )
                 measures_ = [m for m in measures if m != 'render']
-                if len(measures) > 0:
+                if len(measures_) > 0:
                     p = PlotStandardMeasures(df)
                     list_p = p.plot_measures(					
                         folder=image_folder,
@@ -603,19 +607,12 @@ class Performer :
                 image_folder: Path,
                 measures: Optional[Union[List[str], None]]=None,
                 kwargs: Optional[Union[Dict[str, str], None]]=None,
-            ) -> None:
+            ) -> str:
         #-------------------------------
         # Create experiment
         #-------------------------------
         if measures is None:
-            measures=[
-                'attendance', 
-                'deviation', 
-                'efficiency', 
-                'inequality', 
-                'conditional_entropy',
-                'entropy'
-            ]			
+            measures=['attendance']			
         experiment = Experiment(
             agent_class=agent_class,
             fixed_parameters=fixed_parameters,
