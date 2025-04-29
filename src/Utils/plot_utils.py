@@ -186,7 +186,6 @@ class PlotStandardMeasures :
             ax.set_ylabel(variable)
             # ax.set_ylim([-1.1, 1.1])
         else:
-            histplot(data[variable], ax=ax)
             ax.set_xlabel(variable)
             # ax.set_xlim([-1.1, 1.1])
             ax.set_ylabel('Num. of players')

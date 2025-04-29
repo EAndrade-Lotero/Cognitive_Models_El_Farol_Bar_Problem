@@ -17,6 +17,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from Classes.agents import Agent
+from Classes.cognitive_model_agents import PRIOR_MODELS
 from Utils.utils import PPT
 
 
@@ -443,10 +444,6 @@ class ParameterFit :
     Input:
         - agent_class, an agent class
         - model_name, the name of the model
-        - fixed_parameters (list), a list with the name 
-                of the fixed parameters used by the class
-        - free_parameters (dict), a dictionary with the value 
-                of the free parameters used by the class
         - data, a pandas dataframe with the columns id_sim, round, id_player, decision
         - optimizer, str with the name of the optimizer. Two options available:
             * bayesian
@@ -457,23 +454,17 @@ class ParameterFit :
                 self, 
                 agent_class: Agent, 
                 model_name: str, 
-				free_parameters: Dict[str, any],
                 data: pd.DataFrame, 
                 optimizer_name: Union[str, None],
                 with_treatment: Optional[bool]=False
             ) -> None:
         # Bookkeeping
         self.data = data
-        self.free_parameters = free_parameters
         self.agent_class = agent_class
         self.model_name = model_name
         self.with_treatment = with_treatment
-        # Initialize optimizer
         self.optimizer_name = optimizer_name
-        if optimizer_name == 'bayesian':
-            self.optimizer = self.create_bayesian_optimizer()
-        else:
-            raise NotImplementedError(f'Optimizer {optimizer_name} not implemented!')
+        self.debug = True
 
     def get_optimal_parameters(
                 self,
@@ -482,25 +473,74 @@ class ParameterFit :
         '''
         Returns the parameters that minimize dev(parameters)
         '''
-        self.optimizer.maximize(**hyperparameters)
-        return self.optimizer.max
+        results = dict()
+        list_fixed_parameters = PPT.get_fixed_parameters(self.data)
+        # Iterate over fixed parameters
+        for fixed_parameters in list_fixed_parameters:
+            # Get data matching fixed parameters
+            num_ag = int(fixed_parameters["num_agents"])
+            threshold = fixed_parameters["threshold"]
+            if self.debug:
+                print(f'Finding deviance for {num_ag} players and threshold {threshold}...')
+            num_agent_column = PPT.get_num_player_column(self.data.columns)
+            try:
+                df = self.data.groupby([num_agent_column, "threshold"]).get_group(tuple([num_ag, threshold])).reset_index()
+            except Exception as e:
+                print(tuple([num_ag, threshold]))
+                for key, grp in self.data.groupby([num_agent_column, "threshold"]):
+                    print('=>', key)
+                raise Exception(e)
+            
+            # Create the list of free parameters from model
+            try:
+                free_parameters, pbounds = self.get_pbounds(fixed_paramters=fixed_parameters)
+            except Exception as e:
+                print(f'Error getting bounds from {self.agent_class}:\n{e}')
+                raise e
 
-    def create_bayesian_optimizer(self):
+            # Create optimizer
+            if self.optimizer_name == 'bayesian':
+                optimizer = self.create_bayesian_optimizer(free_parameters, pbounds)
+            else:
+                raise NotImplementedError(f'Optimizer {self.optimizer_name} not implemented!')
+            
+            # Find optimal parameters
+            optimizer.maximize(**hyperparameters)
+
+            # Save results
+            results['model'] = self.agent_class.__name__
+            results['fixed_parameters'] = fixed_parameters
+            results['free_parameters'] = optimizer.max['params']
+            results['deviance'] = optimizer.max['target']
+            k = len(results['free_parameters'])
+            dev = results['deviance']
+            results['AIC'] = 2*k - 2*dev
+
+            if self.debug:
+                print(f'Optimal parameters for {num_ag} players and threshold {threshold}:\n{results["free_parameters"]}')
+                print(f'Deviance: {results["deviance"]}')
+                print(f'AIC: {results["AIC"]}')
+                print('-'*50)
+
+        return results
+    
+    def create_bayesian_optimizer(
+                self, 
+                free_parameters: Dict[str, any],
+                pbounds: Dict[str, Tuple[float]],
+            ) -> BayesianOptimization:
+        '''
+        Create a Bayesian optimizer for the model given the data.'''
+        # Get the list of free parameters
         # Initialize function to get deviance from model        
         pr = GetDeviance(
             model=self.agent_class,
-            free_parameters=self.free_parameters,
             data=self.data,
+            free_parameters=free_parameters,
             with_treatment=self.with_treatment
         )
         pr.create_deviance_function()
         # Bounded region of parameter space
-        pbounds = dict()
-        for parameter in self.free_parameters:
-            extend_dict = self.get_saved_bounds(parameter)
-            if extend_dict is not None:
-                pbounds.update(extend_dict)
-        print('pbounds:', pbounds)
         # Initialize optimizer
         optimizer = BayesianOptimization(
             f=pr.black_box_function,
@@ -509,6 +549,18 @@ class ParameterFit :
             allow_duplicate_points=True
         )
         return optimizer
+
+    def get_pbounds(self, fixed_paramters: Dict[str, any]) -> Dict[str, Tuple[float]]:
+        '''Returns the bounds of the parameters'''
+        pbounds = self.agent_class.bounds(fixed_paramters)
+        assert (pbounds is not None), f'No bounds for {self.agent_class.name()}'
+        free_parameters = {parameter:np.nan for parameter in pbounds.keys()}
+        # for parameter in self.free_parameters:
+            # extend_dict = self.get_saved_bounds(parameter)
+            # if extend_dict is not None:
+            #     pbounds.update(extend_dict)
+        return free_parameters, pbounds
+
 
     def get_saved_bounds(
                 self, 
@@ -546,4 +598,6 @@ class ParameterFit :
             return {'belief_strength':(1, 100)}
         else:
             raise Exception(f'Parameter {parameter} not known!')
+       
+
 

@@ -787,7 +787,7 @@ class Performer :
             #-------------------------------
             # Plot
             #-------------------------------
-            p = PlotsAndMeasures(df)
+            p = PlotStandardMeasures(df)
             kwargs_ = {'title': agent_class.name()}
             if kwargs is not None:
                 kwargs_.update(kwargs)
