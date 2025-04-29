@@ -1735,7 +1735,7 @@ class MFPM1(CogMod) :
     def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
         bounds = CogMod.bounds(fixed_parameters)
         bounds.update({
-            'belief_strength': (0, 100)
+            'belief_strength': (1, 100)
         })
         return bounds
 

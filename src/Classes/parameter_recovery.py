@@ -2,10 +2,12 @@
 Classes for parameter recovery
 '''
 
+import json
 import pprint
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from tqdm.auto import tqdm
 from types import MethodType
 from bayes_opt import BayesianOptimization
 from typing import (
@@ -17,7 +19,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from Classes.agents import Agent
-from Classes.cognitive_model_agents import PRIOR_MODELS
+from Classes.cognitive_model_agents import *
 from Utils.utils import PPT
 
 
@@ -557,7 +559,6 @@ class ParameterFit :
         free_parameters = {parameter:np.nan for parameter in pbounds.keys()}
         return free_parameters, pbounds
 
-
     def get_saved_bounds(
                 self, 
                 parameter:str,
@@ -594,6 +595,46 @@ class ParameterFit :
             return {'belief_strength':(1, 100)}
         else:
             raise Exception(f'Parameter {parameter} not known!')
-       
+    
+    @staticmethod
+    def run(
+                data: pd.DataFrame, 
+                model_list: List[CogMod], 
+                best_fit_path:Path,
+                new_file: Optional[bool]=False
+            ) -> None:
+        # Create optimization hyperparameters
+        hyperparameters = {
+            'init_points':4,
+            'n_iter':8
+        }
 
+        if new_file:
+            open_method = 'w'
+        else:
+            open_method = 'a'
 
+        # if best_fit_path.exists():
+        #     with open(best_fit_path, 'r') as f:
+        #         lines = f.readlines()
+        #         print('===>>', lines[-1])
+
+        with open(best_fit_path, open_method) as f:
+            for model in tqdm(model_list, desc='Fitting models...'):
+                print(f'Fitting data to model {model.name()}...')
+                best_fit = {'model_name': model.name()}
+
+                print('Creating parameter recovery class...')
+                pf = ParameterFit(
+                    agent_class=model,
+                    model_name=model.__name__,
+                    data=data,
+                    optimizer_name='bayesian'
+                )
+
+                print('Running bayesian optimizer...')
+                res = pf.get_optimal_parameters(hyperparameters)
+                best_fit.update(res)
+
+                # Write one JSON object per line
+                f.write(json.dumps(best_fit) + '\n')        
