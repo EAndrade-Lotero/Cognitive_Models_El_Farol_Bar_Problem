@@ -480,9 +480,9 @@ class ParameterFit :
             # Get data matching fixed parameters
             num_ag = int(fixed_parameters["num_agents"])
             threshold = fixed_parameters["threshold"]
+            num_agent_column = PPT.get_num_player_column(self.data.columns)
             if self.debug:
                 print(f'Finding deviance for {num_ag} players and threshold {threshold}...')
-            num_agent_column = PPT.get_num_player_column(self.data.columns)
             try:
                 df = self.data.groupby([num_agent_column, "threshold"]).get_group(tuple([num_ag, threshold])).reset_index()
             except Exception as e:
@@ -491,7 +491,7 @@ class ParameterFit :
                     print('=>', key)
                 raise Exception(e)
             
-            # Create the list of free parameters from model
+            # Create list of free parameters from model
             try:
                 free_parameters, pbounds = self.get_pbounds(fixed_paramters=fixed_parameters)
             except Exception as e:
@@ -555,10 +555,6 @@ class ParameterFit :
         pbounds = self.agent_class.bounds(fixed_paramters)
         assert (pbounds is not None), f'No bounds for {self.agent_class.name()}'
         free_parameters = {parameter:np.nan for parameter in pbounds.keys()}
-        # for parameter in self.free_parameters:
-            # extend_dict = self.get_saved_bounds(parameter)
-            # if extend_dict is not None:
-            #     pbounds.update(extend_dict)
         return free_parameters, pbounds
 
 

@@ -17,7 +17,7 @@ class ProxyDict :
                 initial_val: float,
                 round_dec: Optional[int]=2
             ) -> None:
-        assert(isinstance(keys, list))
+        assert(isinstance(keys, list)), f'keys should be a list, not {type(keys)}.\nThe keys received are: {keys}'
         self._keys = keys
         self.initial_val = initial_val
         self.data_dict = {key:self.initial_val for key in self._keys}

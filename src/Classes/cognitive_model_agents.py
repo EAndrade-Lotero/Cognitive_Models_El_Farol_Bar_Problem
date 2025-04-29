@@ -413,6 +413,8 @@ class PriorsM1(CogMod) :
             - p, float representing the probability that the
                 agent goes to the bar.
         '''
+        if self.prev_state_ is None:
+            return 0.5
         state = self._get_information_state(self.prev_state_)
         return self.go_prob[state]
 
@@ -438,17 +440,18 @@ class PriorsM1(CogMod) :
     @staticmethod
     def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
         bounds = CogMod.bounds(fixed_parameters)
-        bounds.update({
-            '0-go_prob': (0, 1)
-        })
+        num_agents = fixed_parameters["num_agents"]
+        for agent_n in range(num_agents):
+            bounds.update({
+                f"{agent_n}-go_prob_0": (0, 1)
+            })
         return bounds
 
     @staticmethod
     def create_random_params(num_agents:int) -> Dict[str, float]:
-        free_parameters = {
-            "inverse_temperature": np.random.uniform(4, 32),
-            "0-go_prob_0": np.random.uniform(0, 1)
-        }
+        free_parameters = {"inverse_temperature": np.random.uniform(4, 32)}
+        for agent_n in range(num_agents):
+            free_parameters[f"{agent_n}-go_prob_0"] = np.random.uniform(0, 1)
         return free_parameters
 
 
@@ -503,9 +506,10 @@ class PriorsM2(PriorsM1) :
     @staticmethod
     def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
         num_agents = fixed_parameters["num_agents"]
-        states = np.zeros((2, num_agents + 1))
-        bounds = super().bounds(fixed_parameters)
-        bounds.update({f"go_prob_{state}":(0, 1) for state in states})
+        bounds = CogMod.bounds(fixed_parameters)
+        states = list(product([0, 1], np.arange(num_agents + 1)))
+        for agent_n in range(num_agents):
+            bounds.update({f"{agent_n}-go_prob_{state}":(0, 1) for state in states})
         return bounds	
 
     @staticmethod
@@ -571,17 +575,19 @@ class PriorsM3(PriorsM1) :
     @staticmethod
     def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
         num_agents = fixed_parameters["num_agents"]
-        states = list(product([0, 1], repeat=num_agents))
-        bounds = super().bounds(fixed_parameters)
-        bounds.update({f"go_prob_{state}":(0, 1) for state in states})
+        states = np.arange(2 ** num_agents)
+        bounds = CogMod.bounds(fixed_parameters)
+        for agent_n in range(num_agents):
+            bounds.update({f"{agent_n}-go_prob_{state}":(0, 1) for state in states})
         return bounds
 
     @staticmethod
     def create_random_params(num_agents:int) -> Dict[str, float]:
         states = np.arange(2 ** num_agents)
         free_parameters = {"inverse_temperature": np.random.uniform(4, 32)}
-        for state in states:
-            free_parameters[f"go_prob_{state}"] = np.random.uniform(0, 1)
+        for agent_n in range(num_agents):
+            for state in states:
+                free_parameters[f"{agent_n}-go_prob_{state}"] = np.random.uniform(0, 1)
         return free_parameters
 
 
@@ -1755,7 +1761,8 @@ class MFPM2(MFPM1) :
             fixed_parameters=fixed_parameters, 
             n=n
         )
-        self.states = np.zeros((2, self.num_agents + 1))
+        num_agents = fixed_parameters['num_agents']
+        self.states =  list(product([0, 1], np.arange(num_agents + 1)))
         self.restart()
 
     def get_prev_state(self):
