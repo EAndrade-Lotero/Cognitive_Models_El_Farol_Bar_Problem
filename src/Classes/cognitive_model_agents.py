@@ -1120,150 +1120,6 @@ class PayoffM3(PayoffM1) :
         return 'Payoff-M3'
 
 
-class AvailableSpaceM1(PayoffM1) :
-    '''
-    Defines the error-driven learning rule based on 
-    available space in the bar.
-    This is the unconditioned model.
-    '''
-
-    def __init__(
-                self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
-                n:Optional[int]=1
-            ) -> None:
-        #----------------------
-        # Initialize superclass
-        #----------------------
-        super().__init__(
-            free_parameters=free_parameters, 
-            fixed_parameters=fixed_parameters, 
-            n=n
-        )
-        #----------------------
-        # Bookkeeping for model parameters
-        #----------------------
-        self.ingest_parameters(fixed_parameters, free_parameters)
-
-    def ingest_parameters(
-                self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
-            ) -> None:
-        super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = free_parameters['bias']
-
-    def _get_G(self, obs_state: Tuple[int]) -> float:
-        action = obs_state[self.number]
-        # Get attendance other players
-        attendance_others = np.sum(obs_state) - action
-        G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
-        if self.debug:
-            print(f'Attendance other players: {attendance_others}')
-            if action == 0:
-                print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
-            elif action == 1:
-                print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
-            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
-        return G
-
-    @staticmethod
-    def name():
-        return 'AvailableSpace-M1'
-
-    @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
-        bounds = PayoffM1.bounds(fixed_parameters)
-        bounds.update({
-            'bias': (0, 1)
-        })
-        return bounds
-
-
-class AvailableSpaceM2(AvailableSpaceM1) :
-    '''
-    Defines the error-driven learning rule based on 
-    available space in the bar.
-    This model conditions G on the previous action 
-    and aggregate state.
-    '''
-
-    def __init__(
-                self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
-                n:Optional[int]=1
-            ) -> None:
-        #----------------------
-        # Initialize superclass
-        #----------------------
-        super().__init__(
-            free_parameters=free_parameters, 
-            fixed_parameters=fixed_parameters, 
-            n=n
-        )
-
-    def _get_G(self, obs_state: Tuple[int]) -> float:
-        action = obs_state[self.number]
-        # Get attendance other players
-        attendance_others = np.sum(obs_state) - action
-        G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
-        if self.debug:
-            print(f'Attendance other players: {attendance_others}')
-            if action == 0:
-                print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
-            elif action == 1:
-                print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
-            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
-        return G
-
-    @staticmethod
-    def name():
-        return 'AvailableSpace-M2'
-
-
-class AvailableSpaceM3(AvailableSpaceM1) :
-    '''
-    Defines the error-driven learning rule based on 
-    available space in the bar.
-    This model conditions G on the previous actions vector, the full-state.
-    '''
-
-    def __init__(
-                self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
-                n:Optional[int]=1
-            ) -> None:
-        #----------------------
-        # Initialize superclass
-        #----------------------
-        super().__init__(
-            free_parameters=free_parameters, 
-            fixed_parameters=fixed_parameters, 
-            n=n
-        )
-
-    def _get_G(self, obs_state: Tuple[int]) -> float:
-        action = obs_state[self.number]
-        # Get attendance other players
-        attendance_others = np.sum(obs_state) - action
-        G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
-        if self.debug:
-            print(f'Attendance other players: {attendance_others}')
-            if action == 0:
-                print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
-            elif action == 1:
-                print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
-            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
-        return G
-
-    @staticmethod
-    def name():
-        return 'AvailableSpace-M3'
-
-
 class AttendanceM1(PayoffM1) :
     '''
     Defines the error-driven learning rule based on 
@@ -1324,7 +1180,7 @@ class AttendanceM1(PayoffM1) :
         return bounds
 
 
-class AttendanceM2(AttendanceM1) :
+class AttendanceM2(PayoffM2) :
     '''
     Defines the error-driven learning rule based on 
     weighted combination of average go and payoff.
@@ -1346,6 +1202,13 @@ class AttendanceM2(AttendanceM1) :
             fixed_parameters=fixed_parameters, 
             n=n
         )
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str,any], 
+                free_parameters:Dict[str,any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
@@ -1365,8 +1228,16 @@ class AttendanceM2(AttendanceM1) :
     def name():
         return 'Attendance-M2'
 
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM2.bounds(fixed_parameters)
+        bounds.update({
+            'bias': (0, 1)
+        })
+        return bounds
+    
 
-class AttendanceM3(AttendanceM1) :
+class AttendanceM3(PayoffM3) :
     '''
     Defines the error-driven learning rule based on weighted 
     combination of average go and payoff.
@@ -1387,6 +1258,13 @@ class AttendanceM3(AttendanceM1) :
             fixed_parameters=fixed_parameters, 
             n=n
         )
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str,any], 
+                free_parameters:Dict[str,any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
@@ -1406,8 +1284,140 @@ class AttendanceM3(AttendanceM1) :
     def name():
         return 'Attendance-M3'
 
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM3.bounds(fixed_parameters)
+        bounds.update({
+            'bias': (0, 1)
+        })
+        return bounds
 
-class FairnessM1(PayoffM1) :
+
+class AvailableSpaceM1(AttendanceM1) :
+    '''
+    Defines the error-driven learning rule based on 
+    available space in the bar.
+    This is the unconditioned model.
+    '''
+
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str,any]]={}, 
+                fixed_parameters:Optional[Dict[str,any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        action = obs_state[self.number]
+        # Get attendance other players
+        attendance_others = np.sum(obs_state) - action
+        G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
+        if self.debug:
+            print(f'Attendance other players: {attendance_others}')
+            if action == 0:
+                print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
+            elif action == 1:
+                print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
+            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+        return G
+
+    @staticmethod
+    def name():
+        return 'AvailableSpace-M1'
+
+
+class AvailableSpaceM2(AttendanceM2) :
+    '''
+    Defines the error-driven learning rule based on 
+    available space in the bar.
+    This model conditions G on the previous action 
+    and aggregate state.
+    '''
+
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str,any]]={}, 
+                fixed_parameters:Optional[Dict[str,any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        action = obs_state[self.number]
+        # Get attendance other players
+        attendance_others = np.sum(obs_state) - action
+        G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
+        if self.debug:
+            print(f'Attendance other players: {attendance_others}')
+            if action == 0:
+                print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
+            elif action == 1:
+                print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
+            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+        return G
+
+    @staticmethod
+    def name():
+        return 'AvailableSpace-M2'
+
+
+class AvailableSpaceM3(AttendanceM3) :
+    '''
+    Defines the error-driven learning rule based on 
+    available space in the bar.
+    This model conditions G on the previous actions vector, the full-state.
+    '''
+
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str,any]]={}, 
+                fixed_parameters:Optional[Dict[str,any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        action = obs_state[self.number]
+        # Get attendance other players
+        attendance_others = np.sum(obs_state) - action
+        G = ((attendance_others + 0.5) - int(self.threshold * self.num_agents)) * (1 - 2 * action)
+        if self.debug:
+            print(f'Attendance other players: {attendance_others}')
+            if action == 0:
+                print(f'G = {attendance_others + 0.5} - {self.threshold} * {self.num_agents}')
+            elif action == 1:
+                print(f'G = {self.threshold} * {self.num_agents} - {attendance_others + 0.5}')
+            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+        return G
+
+    @staticmethod
+    def name():
+        return 'AvailableSpace-M3'
+
+
+class FairnessM1(AttendanceM1) :
     '''
     Defines the error-driven learning rule based 
     on weighted combination of fair amount of go
@@ -1429,18 +1439,6 @@ class FairnessM1(PayoffM1) :
             fixed_parameters=fixed_parameters, 
             n=n
         )
-        #----------------------
-        # Bookkeeping for model parameters
-        #----------------------
-        self.ingest_parameters(fixed_parameters, free_parameters)
-
-    def ingest_parameters(
-                self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
-            ) -> None:
-        super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = free_parameters['bias']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
@@ -1460,16 +1458,8 @@ class FairnessM1(PayoffM1) :
     def name():
         return 'Fairness-M1'
 
-    @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
-        bounds = PayoffM1.bounds(fixed_parameters)
-        bounds.update({
-            'bias': (0, 1)
-        })
-        return bounds
 
-
-class FairnessM2(FairnessM1) :
+class FairnessM2(AttendanceM2) :
     '''
     Defines the error-driven learning rule based 
     on weighted combination of fair amount of go
@@ -1492,7 +1482,6 @@ class FairnessM2(FairnessM1) :
             fixed_parameters=fixed_parameters, 
             n=n
         )
-        self.bias = free_parameters['bias']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
@@ -1512,8 +1501,16 @@ class FairnessM2(FairnessM1) :
     def name():
         return 'Fairness-M2'
 
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM2.bounds(fixed_parameters)
+        bounds.update({
+            'bias': (0, 0.5)
+        })
+        return bounds
+    
 
-class FairnessM3(FairnessM1) :
+class FairnessM3(AttendanceM3) :
     '''
     Defines the error-driven learning rule based 
     on weighted combination of fair amount of go
@@ -1535,7 +1532,6 @@ class FairnessM3(FairnessM1) :
             fixed_parameters=fixed_parameters, 
             n=n
         )
-        self.bias = free_parameters['bias']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
@@ -1628,7 +1624,7 @@ class MFPM1(CogMod) :
         else:
             prev_sate = self.get_prev_state()
             numerator = self.count_bar_with_capacity(prev_sate) + self.belief_strength
-            denominator = self.count_states(prev_sate) + len(self.states) * self.belief_strength
+            denominator = self.count_states(prev_sate) + 2 * self.belief_strength # <= The '2' comes from two options to normalize over (capacity and no capacity)
             prob_capacity = numerator / denominator
             prob_crowded = 1 - prob_capacity
             eu = prob_capacity - prob_crowded
@@ -1825,11 +1821,13 @@ MODELS = [
     MFPM1, MFPM2, MFPM3
 ]
 
+M1_MODELS = [model for model in MODELS if model.name().split('-')[-1] == 'M1']
+M2_MODELS = [model for model in MODELS if model.name().split('-')[-1] == 'M2']
+M3_MODELS = [model for model in MODELS if model.name().split('-')[-1] == 'M3']
+
 MFPS = [MFPM1, MFPM2, MFPM3]
 
 PRIOR_MODELS = [PriorsM1, PriorsM2, PriorsM3]
-
-COMPLEX_PARAMETER_MODELS = MFPS + PRIOR_MODELS
 
 # free_parameters_error_driven_1 = {
 # 	'inverse_temperature':10,

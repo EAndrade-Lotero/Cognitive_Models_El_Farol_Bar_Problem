@@ -548,7 +548,7 @@ class ParameterFit :
             f=pr.black_box_function,
             pbounds=pbounds,
             random_state=1,
-            allow_duplicate_points=True
+            allow_duplicate_points=False ###########################
         )
         return optimizer
 
@@ -605,19 +605,14 @@ class ParameterFit :
             ) -> None:
         # Create optimization hyperparameters
         hyperparameters = {
-            'init_points':4,
-            'n_iter':8
+            'init_points':8,
+            'n_iter':16
         }
 
         if new_file:
             open_method = 'w'
         else:
             open_method = 'a'
-
-        # if best_fit_path.exists():
-        #     with open(best_fit_path, 'r') as f:
-        #         lines = f.readlines()
-        #         print('===>>', lines[-1])
 
         with open(best_fit_path, open_method) as f:
             for model in tqdm(model_list, desc='Fitting models...'):
