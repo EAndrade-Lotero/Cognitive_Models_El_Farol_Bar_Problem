@@ -2,9 +2,11 @@
 Class with the El Farol bar environment
 '''
 
-import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
 from pathlib import Path
+from typing import Union
 
 class Bar :
     '''
@@ -50,7 +52,12 @@ class Bar :
         '''
         self.history = []
 
-    def render(self, file, num_rounds:int=15):
+    def render(
+                self, 
+                axes:Union[plt.Axes, None]=None,
+                file:Union[Path, None]=None, 
+                num_rounds:int=15
+            ) -> plt.Axes:
         '''
         Renders the history of attendances.
         '''
@@ -62,7 +69,10 @@ class Bar :
         # Convert the history into format player, round
         decisions = [[h[i] for h in history] for i in range(self.num_agents)]
         # Create plot
-        fig, axes = plt.subplots(figsize=(0.5*num_rounds,2))
+        if axes is None:
+            fig, axes = plt.subplots(
+                figsize=(0.5*num_rounds, self.num_agents)
+            )
         # Determine step sizes
         step_x = 1/num_rounds
         step_y = 1/self.num_agents
@@ -109,6 +119,7 @@ class Bar :
         for t in tangulos:
             axes.add_patch(t)
         axes.axis('off')
-        plt.savefig(file, dpi=300)
-        plt.close()
+        if file is not None:
+            plt.savefig(file, dpi=300)
+        return axes
         
