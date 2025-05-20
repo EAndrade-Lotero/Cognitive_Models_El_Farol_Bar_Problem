@@ -20,7 +20,7 @@ The repository includes data, simulation code, and model fitting routines to ans
 
 ## 📁 Repository Structure
 
-1. (Code)[https://github.com/EAndrade-Lotero/Cognitive_Models_El_Farol_Bar_Problem/blob/main/src/Classes/cognitive_model_agents.py] implementing cognitive models and jupyter notebooks to test them.
+1. [Code](https://github.com/EAndrade-Lotero/Cognitive_Models_El_Farol_Bar_Problem/blob/main/src/Classes/cognitive_model_agents.py) implementing cognitive models and jupyter notebooks to test them.
 2. Helper functions and classes.
 3. Human data.
 4. Model fitting.
