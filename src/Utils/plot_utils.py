@@ -409,6 +409,7 @@ class PlotVSMeasures:
         'inequality',
         'entropy',
         'conditional_entropy',
+        'alternation_index'
     ]
 
     def __init__(self, data:pd.DataFrame) -> None:
@@ -434,7 +435,11 @@ class PlotVSMeasures:
         kwargs.update(kwargs_)
         info_list = list()
         measures = list()
-        for idx, ax in enumerate(axes):
+        for idx, pair_idx in enumerate(grid):
+            if grid.length > 1:
+                ax = axes[pair_idx]
+            else:
+                ax = axes
             # Get pair of measures to plot
             pair_measures = measure_pairs[idx]
             # Add measures to list
@@ -462,13 +467,17 @@ class PlotVSMeasures:
             max_m = max_m + 0.1*(max_m - min_m)
             dict_max_min[measure] = [min_m, max_m]
         # Customize axes
-        for idx, ax in enumerate(axes):        
+        for idx, pair_idx in enumerate(grid):
+            if grid.length > 1:
+                ax = axes[pair_idx]
+            else:
+                ax = axes
             pair_measures = measure_pairs[idx]
             ax.set_xlabel(pair_measures[0])
             ax.set_ylabel(pair_measures[1])
             ax.set_xlim(dict_max_min[pair_measures[0]])
             ax.set_ylim(dict_max_min[pair_measures[1]])
-            if idx == len(axes) - 1:
+            if idx == grid.length - 1:
                 # Get legend handles/labels from the last axes
                 handles, labels = ax.get_legend_handles_labels()
             ax.legend().remove()
@@ -503,8 +512,9 @@ class PlotVSMeasures:
         assert(measure2 in self.standard_measures)
         measures = [measure1, measure2]
         # Measure on the given measures
-        gm = GetMeasurements(self.data, measures, T=T)
-        df_measures = gm.get_measurements()
+        # gm = GetMeasurements(self.data, measures, T=T)
+        # df_measures = gm.get_measurements()
+        df_measures = self.get_data(measures, T)
         # Jitter measures for better display
         sigma = 0.001
         df_measures[measure1] += np.random.normal(0,sigma, len(df_measures[measure1]))
@@ -570,6 +580,25 @@ class PlotVSMeasures:
             # image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))  # Reshape to (H, W, 3)
             # return image
         return info
+
+    def get_data(self, measures:List[str], T:int) -> pd.DataFrame:
+        # Check if alternation index is in measures
+        ai_dict = AlternationIndex.check_alternation_index_in_measures(measures)
+        # Get other measures
+        get_meas = GetMeasurements(
+            self.data, 
+            measures=ai_dict['measures'], 
+            T=T
+        )
+        data = get_meas.get_measurements()
+        ordered_models = OrderStrings.dict_as_numeric(data['model'].unique())
+        data['model'] = data['model'].map(ordered_models)
+        data.sort_values(by='model', inplace=True)
+        # Add alternation index
+        if ai_dict['check']:
+            ai = AlternationIndex.from_file(priority='statsmodels')
+            data['alternation_index'] = ai(data)
+        return data
 
 
 class PlotsAndMeasures :
@@ -1972,7 +2001,7 @@ class BarRenderer :
     def __init__(
                 self, 
                 data:pd.DataFrame,
-                images_folder: Path
+                image_file: Optional[Union[Path, None]]=None
             ) -> None:
         self.data = data
         self.history = self.get_history()
@@ -1981,7 +2010,7 @@ class BarRenderer :
         self.room = data[group_column].unique()[0]
         num_players_column = PPT.get_num_player_column(data.columns)
         self.num_players = data[num_players_column].unique()[0]
-        self.images_folder = images_folder
+        self.image_file = image_file
         # Determine color
         self.go_color='blue'
         self.no_go_color='lightgray'
@@ -1990,14 +2019,23 @@ class BarRenderer :
     def __str__(self) -> str:
         return f'room:{self.room} --- num_players:{self.num_players} --- thresholds:{self.thresholds}'
 
-    def render(self, num_rounds: Optional[int]=30):
-        file = PathUtils.add_file_name(
-            path=self.images_folder, 
-            file_name=f'room{self.room}',
-            extension='png'
+    def render(
+                self,
+                ax: Optional[Union[plt.axis, None]]=None, 
+                title: Optional[Union[str, None]]=None,
+                num_rounds: Optional[int]=30
+            ) -> plt.axis:
+        if self.image_file is not None:
+            file = PathUtils.add_file_name(
+                path=self.image_file, 
+                file_name=f'room{self.room}',
+                extension='png'
+            )
+        self.render_threshold(
+            ax=ax,
+            title=title, 
+            num_rounds=num_rounds
         )
-        self.render_threshold(file, num_rounds)
-        print(f'Bar attendance saved to file {file}')
 
     def get_history(self):
         history = list()
@@ -2007,9 +2045,9 @@ class BarRenderer :
 
     def render_threshold(
                 self, 
-                file:Optional[Union[Path, None]]=None, 
-                title:Optional[Union[str, None]]=None,
-                num_rounds:Optional[int]=30
+                ax: Optional[Union[plt.axis, None]]=None,
+                title: Optional[Union[str, None]]=None,
+                num_rounds: Optional[int]=30
             ) -> None:
         '''
         Renders the history of attendances.
@@ -2022,7 +2060,10 @@ class BarRenderer :
         # Convert the history into format player, round
         decisions = [[h[i] for h in history] for i in range(self.num_players)]
         # Create plot
-        fig, axes = plt.subplots(figsize=(0.5*num_rounds,0.5*self.num_players))
+        if ax is None:
+            fig, axes = plt.subplots(figsize=(0.5*num_rounds,0.5*self.num_players))
+        else:
+            axes = ax
         # Determine step sizes
         step_x = 1/num_rounds
         step_y = 1/self.num_players
@@ -2068,8 +2109,10 @@ class BarRenderer :
         axes.axis('off')
         if title is not None:
             axes.set_title(title)
-        if file is not None:
-            plt.savefig(file, dpi=self.dpi)
-            plt.close()
+        if self.image_file is not None:
+            plt.savefig(self.image_file, dpi=self.dpi)
+            print(f'Bar attendance saved to file {self.image_file}')
         else:
             plt.plot()
+        return ax
+        

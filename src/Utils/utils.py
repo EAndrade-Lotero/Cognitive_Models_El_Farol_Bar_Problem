@@ -477,7 +477,7 @@ class GetMeasurements :
         assert(len(self.measures) > 0)
         init = True
         for measure in self.measures:
-            fun = eval(f'GetMeasurements.{measure}')
+            fun = getattr(GetMeasurements, measure)
             if init:
                 df = self.data.groupby(self.columns).apply(fun).reset_index()
                 df.rename(columns={0:measure}, inplace=True)
@@ -500,7 +500,10 @@ class GetMeasurements :
     
     def keep_last_rounds(self) -> None:
         df_list = list()
-        for key, grp in self.data.groupby(self.group_column):
+        columns = [self.group_column]
+        if 'threshold' in self.data.columns:
+            columns.append('threshold')
+        for key, grp in self.data.groupby(columns):
             num_rounds = max(grp["round"].unique())
             grp_aux = pd.DataFrame(grp[grp['round'] >= (num_rounds - self.T)]).reset_index(drop=True)
             df_list.append(grp_aux)
@@ -571,6 +574,7 @@ class Grid:
                 vertical:Optional[bool]=True,
                 iterable:Optional[bool]=False
             ) -> None:
+        self.length = length
         num1 = int(np.sqrt(length))
         num2 = length // num1
         if num1 * num2 < length:
@@ -593,3 +597,17 @@ class Grid:
     
     def pair_to_index(self, x, y):
         return np.ravel_multi_index((x, y), self.shape)
+
+    def __iter__(self):
+        self._current = 0  # Reset counter
+        return self
+
+    def __next__(self):
+        if self._current >= self.length:
+            raise StopIteration
+        value = self.index_to_pair(self._current)
+        self._current += 1
+        return value
+    
+    def __len__(self):
+        return self.length
