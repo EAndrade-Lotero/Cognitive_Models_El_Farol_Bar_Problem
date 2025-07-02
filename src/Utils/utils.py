@@ -409,7 +409,7 @@ class GetMeasurements :
                 data: pd.DataFrame,
                 measures: List[str],
                 normalize: Optional[bool]=False,
-                T: Optional[int]=20,
+                T: Optional[int]=np.infty,
                 per_round: Optional[bool]=False,
                 per_player: Optional[bool]=False
             ) -> None:
@@ -417,7 +417,7 @@ class GetMeasurements :
         # Book keeping
         #-----------------------------
         for measure in measures:
-            assert(measure in ['attendance', 'efficiency', 'normalized_efficiency', 'inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
+            assert(measure in ['attendance', 'efficiency', 'bounded_efficiency', 'inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
         self.measures = measures
         self.normalize = normalize
         self.T = T
@@ -450,7 +450,7 @@ class GetMeasurements :
         init = True
         for measure in self.measures:
             variable = self.get_variable_from_measure(measure)
-            fun = eval(f'GetMeasurements.{measure}')
+            fun = getattr(GetMeasurements, measure)
             if init:
                 list_df = list()
                 for key, grp in self.data.groupby(self.columns):
@@ -479,7 +479,7 @@ class GetMeasurements :
         for measure in self.measures:
             fun = getattr(GetMeasurements, measure)
             if init:
-                df = self.data.groupby(self.columns).apply(fun).reset_index()
+                df = self.data.groupby(self.columns).apply(fun).reset_index().dropna()
                 df.rename(columns={0:measure}, inplace=True)
                 if self.normalize:
                     df[measure] = (df[measure]-df[measure].mean())/df[measure].std()
@@ -521,7 +521,7 @@ class GetMeasurements :
         return df['score'].mean()
 
     @staticmethod
-    def normalized_efficiency(df: pd.DataFrame) -> float:
+    def bounded_efficiency(df: pd.DataFrame) -> float:
         # assert(GetMeasurements.one_group_only(df))
         threshold = df['threshold'].mean()
         if threshold == 0:

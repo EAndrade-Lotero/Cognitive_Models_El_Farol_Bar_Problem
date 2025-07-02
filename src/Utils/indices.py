@@ -33,8 +33,8 @@ class AlternationIndex:
         self.seed = seed
         self.rng = np.random.default_rng(seed=seed)
         self.configuration_points = self.create_configurations()
-        # self.measures = ['normalized_efficiency', 'entropy', 'conditional_entropy', 'inequality']
-        self.measures = ['normalized_efficiency', 'inequality']
+        # self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
+        self.measures = ['bounded_efficiency', 'inequality']
         self.data = None
         self.sklearn_coefficients = None
         self.statsmodels_coefficients = None
@@ -47,7 +47,7 @@ class AlternationIndex:
         '''Calculate the index from the dataframe'''
         if self.coefficients is None:
             self.create_index_calculator()
-        assert('normalized_efficiency' in df.columns)
+        assert('bounded_efficiency' in df.columns)
         # assert('entropy' in df.columns)
         # assert('conditional_entropy' in df.columns)
         assert('inequality' in df.columns)
@@ -206,8 +206,8 @@ class AlternationIndex:
         if 'alternation_index' in measures_:
             index = measures_.index('alternation_index')
             measures_.pop(index)
-            # measures_ += ['normalized_efficiency', 'inequality', 'entropy', 'conditional_entropy']
-            measures_ += ['normalized_efficiency', 'inequality']
+            # measures_ += ['bounded_efficiency', 'inequality', 'entropy', 'conditional_entropy']
+            measures_ += ['bounded_efficiency', 'inequality']
             measures_ = list(set(measures_))
             check = True
         else:

@@ -59,7 +59,8 @@ class CherryPickEquilibria:
 
     def generate_alternation_simulation(self) -> pd.DataFrame:
         # Generate go array
-        go_array = self.get_fair_periodic_equilibrium(self.num_rounds)
+        # go_array = self.get_fair_periodic_equilibrium(self.num_rounds)
+        go_array = self.random_fair_periodic_equilibrium(self.num_rounds)
         go_array = self.apply_epsilon(go_array).T
         # Generate dataframe
         df = self.generate_dataframe(go_array)
