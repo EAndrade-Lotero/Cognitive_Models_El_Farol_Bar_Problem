@@ -16,7 +16,7 @@ from Utils.cherrypick_simulations import CherryPickEquilibria
 from Config.config import PATHS
 
 class AlternationIndex:
-    '''Estimates the alternation index from simulated data'''
+    '''Estimates the alternation index'''
 
     def __init__(
                 self, 
@@ -42,6 +42,7 @@ class AlternationIndex:
         self.index_path = PATHS['index_path']
         self.priority = 'statsmodels'
         self.debug = True
+        self.alternation_threshold = 0.75
 
     def __call__(self, df:pd.DataFrame) -> float:
         '''Calculate the index from the dataframe'''
@@ -59,7 +60,26 @@ class AlternationIndex:
         # Sigmoid function
         probabilities = 1 / (1 + np.exp(-linear_combination))
         return probabilities
-        
+    
+    def alt_precentage(
+                self, 
+                df: pd.DataFrame,
+                columns: Optional[List[str]]=None
+            ) -> float:
+        '''Calculate the alternation percentage'''
+        data = df.copy()
+        data['probabilities'] = self(data)
+        data['alternation'] = data['probabilities'] > self.alternation_threshold  
+        if columns is not None:
+            data_ = data.groupby(columns).agg(
+                alternation=pd.NamedAgg(column="alternation", aggfunc=lambda x: x.sum()),
+                count=pd.NamedAgg(column="alternation", aggfunc=lambda x: x.count()),
+                alternation_percentage=pd.NamedAgg(column="alternation", aggfunc=lambda x: x.mean())
+            )
+            return data_
+        else:
+            return data['alternation'].mean()
+
     def create_index_calculator(self) -> None:
         '''Create the index calculator based on the priority'''
         if self.priority == 'sklearn':
