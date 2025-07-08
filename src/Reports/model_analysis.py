@@ -44,7 +44,7 @@ def para_fig_random():
 		values=[2, 8],
 		image_folder=image_folder,
 		measures=['entropy', 'conditional_entropy'],
-		kwargs={'T':np.infty}
+		kwargs={'T':np.inf}
 	)
 	Performer.simple_plots(
 		agent_class=Random,
@@ -52,7 +52,7 @@ def para_fig_random():
 		free_parameters=free_parameters,
 		simulation_parameters=simulation_parameters,
 		measures=['hist_states', 'hist_state_transitions'],
-		kwargs={'T':np.infty},
+		kwargs={'T':np.inf},
 		image_folder=image_folder
 	)
 

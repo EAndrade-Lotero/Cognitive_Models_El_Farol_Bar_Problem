@@ -409,7 +409,7 @@ class GetMeasurements :
                 data: pd.DataFrame,
                 measures: List[str],
                 normalize: Optional[bool]=False,
-                T: Optional[int]=np.infty,
+                T: Optional[int]=np.inf,
                 per_round: Optional[bool]=False,
                 per_player: Optional[bool]=False
             ) -> None:
@@ -544,13 +544,13 @@ class GetMeasurements :
     @staticmethod
     def entropy(df: pd.DataFrame) -> float:
         assert(GetMeasurements.one_group_only(df))
-        ge = ConditionalEntropy(df, T=np.infty)
+        ge = ConditionalEntropy(df, T=np.inf)
         return ge.get_group_entropy(df)
 
     @staticmethod
     def conditional_entropy(df: pd.DataFrame) -> float:
         # assert(GetMeasurements.one_group_only(df))
-        ge = ConditionalEntropy(df, T=np.infty)
+        ge = ConditionalEntropy(df, T=np.inf)
         return ge.get_group_conditional_entropy(df)
 
     @staticmethod

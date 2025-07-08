@@ -1,7 +1,7 @@
 import numpy as np
 
 from itertools import permutations
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 from Classes.cognitive_model_agents import CogMod
 from Utils.cherrypick_simulations import CherryPickEquilibria
@@ -86,10 +86,10 @@ class SetFocalRegions:
             ) -> None:
         self.num_agents = num_agents
         self.threshold = threshold
-        self.len_history = len_history
+        self.len_history = int(len_history)
         self.B = int(num_agents * threshold)
         self.focal_regions = []
-        self.max_regions = max_regions
+        self.max_regions = int(max_regions)
         self.history = None
         self.debug = False
 
@@ -165,7 +165,7 @@ class FocalRegionAgent(CogMod):
             num_agents=self.num_agents,
             threshold=self.threshold,
             len_history=self.len_history, 
-            max_regions=fixed_parameters['max_regions']
+            max_regions=free_parameters['max_regions']
         )
         sfr.generate_focal_regions()
         self.sfr = sfr
@@ -183,3 +183,12 @@ class FocalRegionAgent(CogMod):
     @staticmethod
     def name():
         return 'FRA'
+    
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+        num_agents = fixed_parameters['num_agents']
+        return {
+            'inverse_temperature': (1, 64),
+            'len_history': (1, num_agents),
+            'max_regions': (1, 10),
+        }
