@@ -10,6 +10,7 @@ from random import randint, uniform
 from typing import Optional, Union, Dict, List, Tuple
 
 from Classes.agent_utils import ProxyDict, TransitionsFrequencyMatrix
+from Classes.focal_regions import SetFocalRegions
 
 
 class CogMod() :
@@ -1810,6 +1811,129 @@ class MFPM3(MFPM1) :
         return 'MFP-M3'
 
 
+class FocalRegionAgent(CogMod):
+    '''
+    Agent that uses focal regions to determine next action.
+    '''
+    def __init__(
+                self,
+                free_parameters: Optional[Dict[str, any]] = {},
+                fixed_parameters: Optional[Dict[str, any]] = {},
+                n: Optional[int] = 1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(free_parameters, fixed_parameters, n)
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str,any], 
+                free_parameters:Dict[str,any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.len_history = free_parameters['len_history']
+        sfr = SetFocalRegions(
+            num_agents=self.num_agents,
+            threshold=self.threshold,
+            len_history=self.len_history, 
+            max_regions=free_parameters['max_regions']
+        )
+        sfr.generate_focal_regions()
+        self.sfr = sfr
+
+    def determine_action_preferences(self) -> List[float]:
+        preferences = self.sfr.get_action_preferences(self.number)
+        if self.debug:
+            print(f'Preferences: {preferences}')
+        return preferences
+
+    def update(self, score:int, obs_state:List[int]) -> None:
+        self.sfr.add_history(obs_state)
+        super().update(score, obs_state)
+
+    @staticmethod
+    def name():
+        return 'FRA'
+    
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+        num_agents = fixed_parameters['num_agents']
+        return {
+            'inverse_temperature': (1, 64),
+            'len_history': (1, num_agents),
+            'max_regions': (1, 10),
+        }
+
+
+class Titan(AttendanceM2):
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str,any]]={}, 
+                fixed_parameters:Optional[Dict[str,any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(free_parameters, fixed_parameters, n)
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str,any], 
+                free_parameters:Dict[str,any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.len_history = free_parameters['len_history']
+        sfr = SetFocalRegions(
+            num_agents=self.num_agents,
+            threshold=self.threshold,
+            len_history=self.len_history, 
+            max_regions=free_parameters['max_regions']
+        )
+        sfr.generate_focal_regions()
+        self.sfr = sfr
+        self.delta = free_parameters['delta']
+
+    def determine_action_preferences(self) -> List[float]:
+        Q_s_a = super().determine_action_preferences()
+        FRA_preferences = self.sfr.get_action_preferences(self.number)
+        actions = [0, 1]
+        preferences = [self.delta * FRA_preferences[i] + (1 - self.delta) * Q_s_a[i] for i in actions]
+        if self.debug:
+            print(f'Preferences: {preferences}')
+        return preferences
+
+    def update(self, score:int, obs_state:List[int]) -> None:
+        self.sfr.add_history(obs_state)
+        super().update(score, obs_state)
+
+    @staticmethod
+    def name():
+        return 'FRA+Payoff+Attendance'
+    
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+        num_agents = fixed_parameters['num_agents']
+        return {
+            'inverse_temperature': (1, 64),
+            'bias': (0, 1),
+            'learning_rate': (0, 1),
+            'len_history': (1, num_agents),
+            'max_regions': (1, 10),
+            'delta': (0, 0.1),
+        }
+
+
+
 
 MODELS = [
     PriorsM1, PriorsM2, PriorsM3,
@@ -1818,7 +1942,8 @@ MODELS = [
     AttendanceM1, AttendanceM2, AttendanceM3,
     AvailableSpaceM1, AvailableSpaceM2, AvailableSpaceM3,
     FairnessM1, FairnessM2, FairnessM3,
-    MFPM1, MFPM2, MFPM3
+    MFPM1, MFPM2, MFPM3, 
+    FocalRegionAgent, Titan
 ]
 
 M1_MODELS = [model for model in MODELS if model.name().split('-')[-1] == 'M1']

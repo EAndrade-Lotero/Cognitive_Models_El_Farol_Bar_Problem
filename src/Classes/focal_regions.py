@@ -1,10 +1,14 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
+from pathlib import Path
+from typing import Union
 from itertools import permutations
 from typing import List, Optional, Dict, Tuple
 
-from Classes.cognitive_model_agents import CogMod
 from Utils.cherrypick_simulations import CherryPickEquilibria
+
 
 class FocalRegion:
     '''
@@ -73,6 +77,71 @@ class FocalRegion:
         indices = np.roll(indices, -idx)
         region = region[:, indices] 
         return region
+
+    @staticmethod
+    def draw_region(
+                region: np.ndarray, 
+                axes:Union[plt.Axes, None]=None,
+                file:Union[Path, None]=None
+            ) -> plt.Axes:
+        # Get number of rounds and agents
+        num_rounds = region.shape[1]
+        num_agents = region.shape[0]
+        len_padding = 0
+        # Create plot
+        if axes is None:
+            fig, axes = plt.subplots(
+                figsize=(num_rounds, num_agents)
+            )
+        # Determine step sizes
+        step_x = 1/num_rounds
+        step_y = 1/num_agents
+        # Determine color
+        go_color='blue'
+        no_go_color='lightgray'
+        # Draw rectangles (go_color if player goes, gray if player doesnt go)
+        tangulos = []
+        for r in range(num_rounds):
+            for p in range(num_agents):
+                if region[p][r] == 1:
+                    color = go_color
+                elif region[p][r] == 0:
+                    color = no_go_color
+                else:
+                    color = 'none'
+                # Draw filled rectangle
+                tangulos.append(
+                    patches.Rectangle(
+                        (r*step_x,p*step_y),step_x,step_y,
+                        facecolor=color
+                    )
+                )
+        for r in range(len_padding, num_rounds + 1):
+            # Draw border
+            tangulos.append(
+                patches.Rectangle(
+                    (r*step_x,0),0,1,
+                    edgecolor='black',
+                    facecolor=no_go_color,
+                    linewidth=1
+                )
+            )
+        for p in range(num_agents + 1):
+            # Draw border
+            tangulos.append(
+                patches.Rectangle(
+                    (len_padding*step_x,p*step_y),1,0,
+                    edgecolor='black',
+                    facecolor=no_go_color,
+                    linewidth=1
+                )
+            )
+        for t in tangulos:
+            axes.add_patch(t)
+        axes.axis('off')
+        if file is not None:
+            plt.savefig(file, dpi=300)
+        return axes
 
 
 class SetFocalRegions:
@@ -149,46 +218,4 @@ class SetFocalRegions:
         return cadena
 
 
-class FocalRegionAgent(CogMod):
-    '''
-    Agent that uses focal regions to determine next action.
-    '''
-    def __init__(
-                self,
-                free_parameters: Optional[Dict[str, any]] = {},
-                fixed_parameters: Optional[Dict[str, any]] = {},
-                n: Optional[int] = 1
-            ) -> None:
-        super().__init__(free_parameters, fixed_parameters, n)
-        self.len_history = free_parameters['len_history']
-        sfr = SetFocalRegions(
-            num_agents=self.num_agents,
-            threshold=self.threshold,
-            len_history=self.len_history, 
-            max_regions=free_parameters['max_regions']
-        )
-        sfr.generate_focal_regions()
-        self.sfr = sfr
 
-    def determine_action_preferences(self) -> List[float]:
-        preferences = self.sfr.get_action_preferences(self.number)
-        if self.debug:
-            print(f'Preferences: {preferences}')
-        return preferences
-
-    def update(self, score:int, obs_state:List[int]) -> None:
-        self.sfr.add_history(obs_state)
-        super().update(score, obs_state)
-
-    @staticmethod
-    def name():
-        return 'FRA'
-    
-    @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
-        num_agents = fixed_parameters['num_agents']
-        return {
-            'inverse_temperature': (1, 64),
-            'len_history': (1, num_agents),
-            'max_regions': (1, 10),
-        }
