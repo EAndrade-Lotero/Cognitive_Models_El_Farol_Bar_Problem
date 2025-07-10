@@ -516,7 +516,7 @@ class PlotVSMeasures:
         # df_measures = gm.get_measurements()
         df_measures = self.get_data(measures, T)
         # Jitter measures for better display
-        sigma = 0.001
+        sigma = 0.01
         df_measures[measure1] += np.random.normal(0,sigma, len(df_measures[measure1]))
         df_measures[measure2] += np.random.normal(0,sigma, len(df_measures[measure2]))
         # Save extremes

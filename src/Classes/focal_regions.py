@@ -87,6 +87,7 @@ class FocalRegion:
         # Get number of rounds and agents
         num_rounds = region.shape[1]
         num_agents = region.shape[0]
+        region = np.flipud(region)
         len_padding = 0
         # Create plot
         if axes is None:
@@ -103,9 +104,9 @@ class FocalRegion:
         tangulos = []
         for r in range(num_rounds):
             for p in range(num_agents):
-                if region[p][r] == 1:
+                if region[p, r] == 1:
                     color = go_color
-                elif region[p][r] == 0:
+                elif region[p, r] == 0:
                     color = no_go_color
                 else:
                     color = 'none'

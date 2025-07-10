@@ -607,6 +607,8 @@ class Grid:
             raise StopIteration
         value = self.index_to_pair(self._current)
         self._current += 1
+        if len(value) == 1:
+            value = value[0]
         return value
     
     def __len__(self):
