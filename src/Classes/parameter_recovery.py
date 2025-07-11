@@ -19,13 +19,13 @@ from scipy.optimize import minimize, Bounds
 import warnings
 warnings.filterwarnings("ignore")
 
+from Utils.utils import PPT
+from Config.config import PATHS
 from Classes.agents import Agent
 from Classes.cognitive_model_agents import *
-from Utils.utils import PPT
 
 
-data_folder = Path.cwd() / Path('..').resolve() / Path('data', 'likelihoods')
-data_folder.mkdir(parents=True, exist_ok=True)
+data_folder = PATHS['data_likelihoods']
 
 
 class GetEpisodeLikelihood :
