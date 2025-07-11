@@ -9,11 +9,12 @@ import pandas as pd
 from pathlib import Path
 from tqdm.auto import tqdm
 from types import MethodType
-from bayes_opt import BayesianOptimization
 from typing import (
 	List, Dict, Tuple,
 	Union, Optional, Callable
 )
+from bayes_opt import BayesianOptimization
+from scipy.optimize import minimize, Bounds
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -457,7 +458,7 @@ class ParameterFit :
                 agent_class: Agent, 
                 model_name: str, 
                 data: pd.DataFrame, 
-                optimizer_name: Union[str, None],
+                optimizer_type: Union[str, None],
                 with_treatment: Optional[bool]=False
             ) -> None:
         # Bookkeeping
@@ -465,7 +466,7 @@ class ParameterFit :
         self.agent_class = agent_class
         self.model_name = model_name
         self.with_treatment = with_treatment
-        self.optimizer_name = optimizer_name
+        self.optimizer_type = optimizer_type
         self.debug = True
 
     def get_optimal_parameters(
@@ -501,19 +502,27 @@ class ParameterFit :
                 raise e
 
             # Create optimizer
-            if self.optimizer_name == 'bayesian':
+            if self.optimizer_type == 'bayesian':
                 optimizer = self.create_bayesian_optimizer(free_parameters, pbounds)
+                # Find optimal parameters
+                optimizer.maximize(**hyperparameters)
+            elif self.optimizer_type == 'scipy':
+                # Find optimal parameters
+                result = self.create_scipy_optimizer(free_parameters, pbounds)
             else:
-                raise NotImplementedError(f'Optimizer {self.optimizer_name} not implemented!')
+                raise NotImplementedError(f'Optimizer {self.optimizer_type} not implemented!')
             
-            # Find optimal parameters
-            optimizer.maximize(**hyperparameters)
 
             # Save results
             results['model'] = self.agent_class.__name__
             results['fixed_parameters'] = fixed_parameters
-            results['free_parameters'] = optimizer.max['params']
-            results['deviance'] = optimizer.max['target']
+
+            if self.optimizer_type == 'bayesian':
+                results['free_parameters'] = optimizer.max['params']
+                results['deviance'] = optimizer.max['target']
+            elif self.optimizer_type == 'scipy':
+                results['free_parameters'] = {parameter:result.x[i] for i, parameter in enumerate(free_parameters.keys())}
+                results['deviance'] = -result.fun
             k = len(results['free_parameters'])
             dev = results['deviance']
             results['AIC'] = 2*k - 2*dev
@@ -533,6 +542,7 @@ class ParameterFit :
             ) -> BayesianOptimization:
         '''
         Create a Bayesian optimizer for the model given the data.'''
+
         # Get the list of free parameters
         # Initialize function to get deviance from model        
         pr = GetDeviance(
@@ -551,6 +561,50 @@ class ParameterFit :
             allow_duplicate_points=False ###########################
         )
         return optimizer
+
+    def create_scipy_optimizer(
+                self, 
+                free_parameters: Dict[str, any],
+                pbounds: Dict[str, Tuple[float]],
+            ) -> Callable:
+        '''
+        Create a Scipy optimizer for the model given the data.
+        '''
+        def black_box_function(x) -> float:
+            input_dict = {parameter:x[i] for i, parameter in enumerate(free_parameters.keys())}
+            return -pr.black_box_function(**input_dict)
+        
+        # Get the list of free parameters
+        # Initialize function to get deviance from model        
+        pr = GetDeviance(
+            model=self.agent_class,
+            data=self.data,
+            free_parameters=free_parameters,
+            with_treatment=self.with_treatment
+        )
+        pr.create_deviance_function()
+        # Define bounds
+        lower_bounds = []
+        upper_bounds = []
+        for lims in pbounds.values():
+            lower_bounds.append(lims[0])
+            upper_bounds.append(lims[1])
+        x0 = self.random_init(pbounds)
+        # Define optimizer
+        optimizer = minimize(
+            black_box_function,
+            x0=x0,
+            bounds=Bounds(lower_bounds, upper_bounds),
+            method='L-BFGS-B'
+        )
+        return optimizer
+
+    def random_init(self, pbounds: Dict[str, any]) -> np.array:
+        '''Returns a random initial point for the optimizer'''
+        return np.array([
+            np.random.uniform(lims[0], lims[1]) 
+                for parameter, lims in pbounds.items()
+        ])
 
     def get_pbounds(self, fixed_paramters: Dict[str, any]) -> Dict[str, Tuple[float]]:
         '''Returns the bounds of the parameters'''
@@ -601,13 +655,16 @@ class ParameterFit :
                 data: pd.DataFrame, 
                 model_list: List[CogMod], 
                 best_fit_path:Path,
+                optimizer_type: Optional[Union[str, None]]='bayesian',
+                hyperparameters: Optional[Dict[str, int]]=None,
                 new_file: Optional[bool]=False
             ) -> None:
         # Create optimization hyperparameters
-        hyperparameters = {
-            'init_points':8,
-            'n_iter':16
-        }
+        if hyperparameters is None:
+            hyperparameters = {
+                'init_points':8,
+                'n_iter':16
+            }
 
         if new_file:
             open_method = 'w'
@@ -624,10 +681,10 @@ class ParameterFit :
                     agent_class=model,
                     model_name=model.__name__,
                     data=data,
-                    optimizer_name='bayesian'
+                    optimizer_type=optimizer_type
                 )
 
-                print('Running bayesian optimizer...')
+                print('Running optimizer...')
                 res = pf.get_optimal_parameters(hyperparameters)
                 best_fit.update(res)
 

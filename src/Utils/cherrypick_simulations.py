@@ -170,7 +170,7 @@ class CherryPickEquilibria:
         go_agents = self.random_one_shot_equilibrium()
         one_shot_equilibrium = np.zeros((self.num_agents,))
         one_shot_equilibrium[go_agents] = 1
-        equilibrium = [one_shot_equilibrium.tolist()  for _ in range(self.num_rounds)]
+        equilibrium = [one_shot_equilibrium.tolist()  for _ in range(period)]
         equilibrium = np.array(equilibrium).T
         if self.debug:
             print(f'Segmented equilibrium:\n{equilibrium}')

@@ -4,7 +4,7 @@ import matplotlib.patches as patches
 
 from pathlib import Path
 from typing import Union
-from itertools import permutations
+from itertools import permutations, combinations
 from typing import List, Optional, Dict, Tuple
 
 from Utils.cherrypick_simulations import CherryPickEquilibria
@@ -152,7 +152,8 @@ class SetFocalRegions:
                 num_agents: int, 
                 threshold: float,
                 len_history: int,
-                max_regions: Optional[int] = None,
+                max_regions: Optional[int] = 1,
+                seed: Optional[int] = 42
             ) -> None:
         self.num_agents = num_agents
         self.threshold = threshold
@@ -162,6 +163,17 @@ class SetFocalRegions:
         self.max_regions = int(max_regions)
         self.history = None
         self.debug = False
+        cherrypick = CherryPickEquilibria(
+            num_agents=self.num_agents,
+            threshold=self.threshold,
+            epsilon=0,
+            num_rounds=1,
+            num_episodes=1,
+            seed=seed
+        )
+        cherrypick.debug = False
+        self.cherrypick = cherrypick
+        self.rng = np.random.default_rng(seed)
 
     def add_history(self, obs: List[int]) -> None:
         obs_array = np.array(obs).reshape(-1, 1)
@@ -173,17 +185,31 @@ class SetFocalRegions:
 
     def generate_focal_regions(self) -> None:
         '''Generates focal regions.'''
-        cherrypick = CherryPickEquilibria(
-            num_agents=self.num_agents,
-            threshold=self.threshold,
-            epsilon=0,
-            num_rounds=1,
-            num_episodes=1,
-            seed=42
+        fair_regions = self.generate_fair_regions()
+        segmented_regions = self.generate_segmented_regions()
+        regions = fair_regions + segmented_regions
+        num_regions = min(self.max_regions, len(regions))
+        idx_regions = self.rng.choice(
+            range(len(regions)),
+            size=num_regions,
+            replace=False
         )
-        cherrypick.debug = False
+        self.focal_regions = [regions[i] for i in idx_regions]
+
+    def generate_segmented_regions(self) -> List[FocalRegion]:
         regions = []
-        equilibrium = cherrypick.get_fair_periodic_equilibrium(period=self.num_agents)
+        goers = combinations(range(self.num_agents), self.B)
+        for goers in goers:
+            region = np.zeros((self.num_agents, 1))
+            region[goers, 0] = 1
+            go_agents = np.concatenate([region]*self.num_agents, axis=1)
+            regions.append(FocalRegion(go_agents))
+        return regions
+
+    def generate_fair_regions(self) -> List[FocalRegion]:
+        region_strings = [] 
+        regions = []
+        equilibrium = self.cherrypick.get_fair_periodic_equilibrium(period=self.num_agents)
         for variation in permutations(range(equilibrium.shape[1]), self.num_agents):
             # print(f'Variation: {variation}')
             indices = np.array(variation)
@@ -191,16 +217,17 @@ class SetFocalRegions:
             for i in range(indices.shape[0]):
                 rolled_variation = np.roll(indices, i)
                 # print(f'\tRolled variation: {rolled_variation}')
-                if str(rolled_variation) in regions:
+                if str(rolled_variation) in region_strings:
                     # print(f'\t\tRolled variation already in regions: {rolled_variation}')
                     good_variation = False
                     break
             if good_variation:
                 region = equilibrium[:, indices]
-                self.focal_regions.append(FocalRegion(region))
-                regions.append(str(indices))
+                regions.append(FocalRegion(region))
+                region_strings.append(str(indices))
                 if self.max_regions is not None and len(self.focal_regions) >= self.max_regions:
                     break
+        return regions
 
     def get_action_preferences(self, agent_id: int) -> np.ndarray:
         self.history = self.history[:, -self.len_history:]

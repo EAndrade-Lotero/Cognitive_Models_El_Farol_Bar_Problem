@@ -1506,7 +1506,7 @@ class FairnessM2(AttendanceM2) :
     def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM2.bounds(fixed_parameters)
         bounds.update({
-            'bias': (0, 0.5)
+            'bias': (0, 0.01)
         })
         return bounds
     
