@@ -44,8 +44,8 @@ class FocalRegion:
             score = self.similarity_score(region, history)
             scores.append(score)
             if self.debug:
-                print(f'Cicle from column {i}:\n{region}')
-                print(f'Similarity score: {score}')
+                print(f'\tCicle from column {i}:\n{region}')
+                print(f'\tSimilarity score: {score}')
         return scores
 
     def get_action_preferences(
@@ -153,7 +153,7 @@ class SetFocalRegions:
                 threshold: float,
                 len_history: int,
                 max_regions: Optional[int] = 1,
-                seed: Optional[int] = 42
+                seed: Optional[Union[int, None]] = None
             ) -> None:
         self.num_agents = num_agents
         self.threshold = threshold
@@ -163,6 +163,9 @@ class SetFocalRegions:
         self.max_regions = int(max_regions)
         self.history = None
         self.debug = False
+        if seed is None:
+            seed = np.random.randint(1000)
+        self.rng = np.random.default_rng(seed)
         cherrypick = CherryPickEquilibria(
             num_agents=self.num_agents,
             threshold=self.threshold,
@@ -173,7 +176,6 @@ class SetFocalRegions:
         )
         cherrypick.debug = False
         self.cherrypick = cherrypick
-        self.rng = np.random.default_rng(seed)
 
     def add_history(self, obs: List[int]) -> None:
         obs_array = np.array(obs).reshape(-1, 1)

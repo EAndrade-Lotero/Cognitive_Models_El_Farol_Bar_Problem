@@ -1867,7 +1867,7 @@ class FocalRegionAgent(CogMod):
         num_agents = fixed_parameters['num_agents']
         return {
             'inverse_temperature': (1, 64),
-            'len_history': (1, num_agents),
+            'len_history': (1, num_agents + 1),
             'max_regions': (1, 10),
         }
 
@@ -1929,7 +1929,7 @@ class Titan(AttendanceM2):
             'inverse_temperature': (1, 64),
             'bias': (0, 1),
             'learning_rate': (0, 1),
-            'len_history': (1, num_agents),
+            'len_history': (1, num_agents + 1),
             'max_regions': (1, 10),
             'delta': (0, 0.1),
         }
