@@ -393,6 +393,7 @@ class PriorsM1(CogMod) :
                 print(f'{self.go_prob.shape=}')
                 print(f'{self.go_prob=}')
                 print(f'Check also possible error with free parameters:\n{my_free_parameters=}')
+                print(f'Here are also the fixed parameters:\n{fixed_parameters}')
                 raise Exception(e)			
 
     def get_my_free_parameters(self, free_parameters:Dict[str,any]) -> Dict[str,any]:
@@ -579,7 +580,8 @@ class PriorsM3(PriorsM1) :
         states = np.arange(2 ** num_agents)
         bounds = CogMod.bounds(fixed_parameters)
         for agent_n in range(num_agents):
-            bounds.update({f"{agent_n}-go_prob_{state}":(0, 1) for state in states})
+            for state in states:
+                bounds.update({f"{agent_n}-go_prob_{state}":(0, 1) for state in states})
         return bounds
 
     @staticmethod

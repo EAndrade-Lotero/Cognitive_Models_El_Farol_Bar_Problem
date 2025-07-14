@@ -360,10 +360,10 @@ class GetDeviance:
             list_fixed_parameters = PPT.get_fixed_parameters(self.data)
             # Iterate over fixed parameters
             for fixed_parameters in list_fixed_parameters:
-                num_ag = int(fixed_parameters["num_agents"])
+                num_ag = fixed_parameters["num_agents"]
                 threshold = fixed_parameters["threshold"]
                 if self.debug:
-                    print(f'Finding deviance for {num_ag} players and threshold {threshold}...')
+                    print(f'Finding deviance for {int(num_ag)} players and threshold {threshold}...')
                 num_agent_column = PPT.get_num_player_column(self.data.columns)
                 try:
                     df = self.data.groupby([num_agent_column, "threshold"]).get_group(tuple([num_ag, threshold])).reset_index()
@@ -503,12 +503,20 @@ class ParameterFit :
 
             # Create optimizer
             if self.optimizer_type == 'bayesian':
-                optimizer = self.create_bayesian_optimizer(free_parameters, pbounds)
+                optimizer = self.create_bayesian_optimizer(
+                    data=df,
+                    free_parameters=free_parameters, 
+                    pbounds=pbounds
+                )
                 # Find optimal parameters
                 optimizer.maximize(**hyperparameters)
             elif self.optimizer_type == 'scipy':
                 # Find optimal parameters
-                result = self.create_scipy_optimizer(free_parameters, pbounds)
+                result = self.create_scipy_optimizer(
+                    data=df,
+                    free_parameters=free_parameters, 
+                    pbounds=pbounds
+                )
             else:
                 raise NotImplementedError(f'Optimizer {self.optimizer_type} not implemented!')
             
@@ -537,6 +545,7 @@ class ParameterFit :
     
     def create_bayesian_optimizer(
                 self, 
+                data: pd.DataFrame,
                 free_parameters: Dict[str, any],
                 pbounds: Dict[str, Tuple[float]],
             ) -> BayesianOptimization:
@@ -547,7 +556,7 @@ class ParameterFit :
         # Initialize function to get deviance from model        
         pr = GetDeviance(
             model=self.agent_class,
-            data=self.data,
+            data=data,
             free_parameters=free_parameters,
             with_treatment=self.with_treatment
         )
@@ -564,6 +573,7 @@ class ParameterFit :
 
     def create_scipy_optimizer(
                 self, 
+                data: pd.DataFrame,
                 free_parameters: Dict[str, any],
                 pbounds: Dict[str, Tuple[float]],
             ) -> Callable:
@@ -578,7 +588,7 @@ class ParameterFit :
         # Initialize function to get deviance from model        
         pr = GetDeviance(
             model=self.agent_class,
-            data=self.data,
+            data=data,
             free_parameters=free_parameters,
             with_treatment=self.with_treatment
         )
