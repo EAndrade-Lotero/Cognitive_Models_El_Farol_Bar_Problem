@@ -7,6 +7,7 @@ PATHS = {
     'index_path': Path(Path.cwd(), '..', 'data', 'indices').resolve(),
     'bar_images': Path(Path.cwd(), '..', 'images', 'bar_images').resolve(),
     'data_likelihoods': Path(Path.cwd(), '..', 'data', 'likelihoods').resolve(),
+    'figures_for_paper': Path(Path.cwd(), '..', 'Figures for article').resolve(),
 }
 
 # Chech if the paths exist
