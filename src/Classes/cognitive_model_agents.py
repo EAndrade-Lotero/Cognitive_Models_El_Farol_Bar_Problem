@@ -1847,9 +1847,13 @@ class FocalRegionAgent(CogMod):
         )
         sfr.generate_focal_regions()
         self.sfr = sfr
+        self.c = free_parameters['c']
 
     def determine_action_preferences(self) -> List[float]:
-        preferences = self.sfr.get_action_preferences(self.number)
+        # Get preferences based on Jaccard distance
+        raw_preferences = self.sfr.get_action_preferences(self.number)
+        # Get exponential preferences
+        preferences = np.exp(self.c * raw_preferences)
         if self.debug:
             print(f'Preferences: {preferences}')
         return preferences
@@ -1869,6 +1873,7 @@ class FocalRegionAgent(CogMod):
             'inverse_temperature': (1, 64),
             'len_history': (1, num_agents + 1),
             'max_regions': (1, 10),
+            'c': (0, 3),
         }
 
 
@@ -1903,13 +1908,17 @@ class Titan(AttendanceM2):
         )
         sfr.generate_focal_regions()
         self.sfr = sfr
+        self.c = free_parameters['c']
         self.delta = free_parameters['delta']
 
     def determine_action_preferences(self) -> List[float]:
         Q_s_a = super().determine_action_preferences()
-        FRA_preferences = self.sfr.get_action_preferences(self.number)
-        actions = [0, 1]
-        preferences = [self.delta * FRA_preferences[i] + (1 - self.delta) * Q_s_a[i] for i in actions]
+        # Get preferences based on Jaccard similarity
+        raw_preferences = self.sfr.get_action_preferences(self.number)
+        # Get exponential preferences
+        FRA_preferences = np.exp(self.c * raw_preferences)
+        # Add up preferences
+        preferences = self.delta * FRA_preferences + (1 - self.delta) * Q_s_a
         if self.debug:
             print(f'Preferences: {preferences}')
         return preferences
@@ -1931,7 +1940,8 @@ class Titan(AttendanceM2):
             'learning_rate': (0, 1),
             'len_history': (1, num_agents + 1),
             'max_regions': (1, 10),
-            'delta': (0, 0.1),
+            'c': (0, 3),
+            'delta': (0, 1),
         }
 
 

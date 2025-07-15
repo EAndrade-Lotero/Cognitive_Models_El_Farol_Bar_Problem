@@ -611,6 +611,7 @@ class PlotsAndMeasures :
         Input:
             - data, pandas dataframe
         '''
+        assert('model' in data.columns)
         self.data = data
         self.dpi = 300
         self.extension = 'pdf'
@@ -1284,7 +1285,12 @@ class PlotsAndMeasures :
         else:
             print('Warning: No plot saved by plot_convergence. To save plot, provide file name.')
 
-    def plot_hist_scores(self, mu:float, file:str=None) -> plt.axis:
+    def plot_hist_scores(
+                self, 
+                mu:float, 
+                file: Optional[Union[str, None]]=None,
+                ax: Optional[Union[plt.axis, None]]=None,
+            ) -> plt.axis:
         '''
         Plots the histogram of scores.
         Input:
@@ -1297,18 +1303,19 @@ class PlotsAndMeasures :
         vs_models = True if len(models) > 1 else False
         df = self.data.copy()
         df = df.groupby(['model', 'id_sim', 'id_player'])['score'].mean().reset_index(name='av_score')
-        fig, ax = plt.subplots(figsize=(4,3.5))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(4,3.5))
         if vs_models:
-            ax = swarmplot(x=df['av_score'], hue='model', size=3)
+            swarmplot(x=df['av_score'], hue='model', size=3, ax=ax)
         else:
-            ax = swarmplot(x=df['av_score'], size=3)
+            ax = swarmplot(x=df['av_score'], size=3, ax=ax)
         ax.axvline(x=mu, color='red', label='Fair quantity')
         ax.set_xlabel('Av. score per player')
         ax.grid()
         if file is not None:
             plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
             print('Plot saved to', file)
-        return fig
+        return ax
 
     def plot_decisions(self, file:str=None) -> plt.figure:
         '''
@@ -1342,10 +1349,11 @@ class PlotsAndMeasures :
     
     def plot_hist_states(
                 self,
-                T:Optional[int]=20,
-                file:Optional[Union[Path, None]]=None,
-                kwargs:Optional[Dict[str,any]]={}
-            ) -> pd.DataFrame:
+                T: Optional[int]=20,
+                ax: Optional[Union[plt.axis, None]]=None,
+                file: Optional[Union[Path, None]]=None,
+                kwargs: Optional[Dict[str,any]]={}
+            ) -> plt.axis:
         # Determine the number of model in data
         if 'only_value' in kwargs.keys():
             if kwargs['only_value']:
@@ -1385,7 +1393,8 @@ class PlotsAndMeasures :
             num_states = len(df.state.unique())
             list_num_states.append(num_states)
         df = pd.concat(df_list, ignore_index=True)
-        fig, ax = plt.subplots(figsize=(1/4*self.width*max(list_num_states), self.height))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(1/4*self.width*max(list_num_states), self.height))
         if num_models == 1:
             barplot(x='state', y='frequency', data=df, ax=ax)
         else:
@@ -1407,12 +1416,12 @@ class PlotsAndMeasures :
         if 'legend' in kwargs.keys():
             plt.legend(title=kwargs['legend'])
         ax.grid()
+        ax.tick_params(axis='x', labelrotation=90)
         if file is not None:
             plt.savefig(file, dpi=self.dpi, bbox_inches="tight")
             print('Plot saved to', file)
         else:
             print('Warning: No plot saved by plot_hist_states. To save plot, provide file name.')
-        plt.close(fig)
         return ax 
     
     def plot_hist_state_transitions(

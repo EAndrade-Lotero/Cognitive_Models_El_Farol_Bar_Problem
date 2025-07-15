@@ -64,7 +64,6 @@ class FocalRegion:
         # print(f'Action: {action}')
         action_preferences = np.zeros(2)
         action_preferences[action] = scores[idx_similarity]
-        # action_preferences[1 - action] = 1 - scores[idx_similarity]
         return action_preferences
 
     def __str__(self):

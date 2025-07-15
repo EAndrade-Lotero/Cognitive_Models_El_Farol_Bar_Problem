@@ -1,7 +1,8 @@
 '''
 Class with the El Farol bar environment
 '''
-
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
@@ -20,7 +21,7 @@ class Bar :
         self.threshold = threshold
         self.history = []
 
-    def step(self, decisions:list) -> list :
+    def step(self, decisions:list, update:bool=True) -> list :
         '''
         Computes the scores on the basis of the attendance.
         Input:
@@ -34,7 +35,8 @@ class Bar :
         '''
         assert(all([a in [0,1] for a in decisions]))
         attendance = sum(decisions)
-        self.history.append(decisions)
+        if update:
+            self.history.append(decisions)
         scores = []
         for a in decisions:
             if a == 1:
@@ -54,10 +56,10 @@ class Bar :
 
     def render(
                 self, 
-                axes:Union[plt.Axes, None]=None,
+                ax:Union[plt.axis, None]=None,
                 file:Union[Path, None]=None, 
                 num_rounds:int=15
-            ) -> plt.Axes:
+            ) -> plt.axis:
         '''
         Renders the history of attendances.
         '''
@@ -69,8 +71,8 @@ class Bar :
         # Convert the history into format player, round
         decisions = [[h[i] for h in history] for i in range(self.num_agents)]
         # Create plot
-        if axes is None:
-            fig, axes = plt.subplots(
+        if ax is None:
+            fig, ax = plt.subplots(
                 figsize=(0.5*num_rounds, self.num_agents)
             )
         # Determine step sizes
@@ -117,9 +119,50 @@ class Bar :
                 )
             )
         for t in tangulos:
-            axes.add_patch(t)
-        axes.axis('off')
+            ax.add_patch(t)
+        ax.axis('off')
         if file is not None:
             plt.savefig(file, dpi=300)
-        return axes
+        return ax
         
+    def to_pandas(self) -> pd.DataFrame:
+        '''
+        Creates a pandas dataframe with the information from the current objects.
+        Output:
+            - pandas dataframe with the following six variables:
+            
+            Variables:
+                * id_sim: a unique identifier for the simulation
+                * threshold: the bar's threshold
+                * round: the round number
+                * attendance: the round's attendance
+                * id_player: the player's number
+                * decision: the player's decision
+                * score: the player's score
+                * model: the model's name
+                * convergence: the maximum difference between 
+                            two previous approximations of 
+                            probability estimates
+        '''
+        history = np.array(self.history).T
+        data = {}
+        data["id_sim"] = list()
+        data["round"] = list()
+        data["attendance"] = list()
+        data["id_player"] = list()
+        data["decision"] = list()
+        data["score"] = list()
+        for r in range(history.shape[1]):
+            attendance, scores = self.step(history[:, r], update=False)
+            for i in range(self.num_agents):
+                data["id_sim"].append(1)
+                data["round"].append(r)
+                data["id_player"].append(i)
+                data["decision"].append(history[i, r])
+                data["attendance"].append(attendance)
+                data["score"].append(scores[i])
+        df = pd.DataFrame.from_dict(data)		
+        df["model"] = None
+        df["threshold"] = self.threshold
+        df["num_agents"] = self.num_agents
+        return df

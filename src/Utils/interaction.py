@@ -510,6 +510,7 @@ class Performer :
                 measures: Optional[Union[List[str], None]]=None,
                 image_folder: Optional[Union[None, Path]]=None,
                 data_folder: Optional[Union[None, Path]]=None,
+                new_file: Optional[bool]=True,
                 seeds: Optional[Union[None, List[int]]]=None,
                 kwargs: Optional[Union[Dict[str, any], None]]=None
             ) -> None:
@@ -577,7 +578,10 @@ class Performer :
                     )
                     list_images += list_p
         if data_folder is not None:
-            data_file = PathUtils.add_file_name(data_folder, agent_class.name(), 'csv')
+            if new_file:
+                data_file = PathUtils.add_file_name(data_folder, agent_class.name(), 'csv')
+            else:
+                data_file = Path(data_folder, f"{agent_class.name()}.csv")
             df = pd.concat(df_list, ignore_index=True)
             df.to_csv(data_file)
             print(f'Data saved to {data_file}')
