@@ -169,10 +169,10 @@ class Episode :
                 print('\n' + '='*10 + f'Episode {t}' + '='*10 + '\n')
             # Reset environment for new episode
             self.environment.reset()
-            # Check if focal regions are used
-            agent = self.agents[0] 
-            if hasattr(agent, 'sfr'):
-                self.stir_focal_regions()
+            # # Check if focal regions are used
+            # agent = self.agents[0] 
+            # if hasattr(agent, 'sfr'):
+            #     self.stir_focal_regions()
             # Run the episode
             self.run(verbose=verbose)
             data_frames.append(self.to_pandas())
@@ -679,11 +679,11 @@ class Performer :
             model='',\
             num_rounds=num_rounds
         )
-        #-------------------------------
-        # Run simulation per seed
-        #-------------------------------
-        seed(random_seed)
-        rng = np.random.default_rng(random_seed)
+        # #-------------------------------
+        # # Run simulation per seed
+        # #-------------------------------
+        # seed(random_seed)
+        # rng = np.random.default_rng(random_seed)
         #-------------------------------
         # Run simulation
         #-------------------------------

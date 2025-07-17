@@ -192,18 +192,9 @@ class SetFocalRegions:
         '''Generates focal regions.'''
         fair_regions = self.generate_fair_regions()
         segmented_regions = self.generate_segmented_regions()
-        print(f"Num. fair regions: {len(fair_regions)}")
-        print(f"Num. segmented regions: {len(segmented_regions)}")
-        regions = fair_regions + segmented_regions
-        if len(regions) > self.max_regions:
-            idx_regions = self.rng.choice(
-                range(len(regions)),
-                size=self.max_regions,
-                replace=False
-            )
-            self.focal_regions = [regions[i] for i in idx_regions]
-        else:
-            self.focal_regions = regions
+        # regions = fair_regions + segmented_regions
+        regions = self.equal_region_sizes([fair_regions, segmented_regions])
+        self.focal_regions = regions
 
     def generate_segmented_regions(self) -> List[FocalRegion]:
         regions = []
@@ -257,6 +248,9 @@ class SetFocalRegions:
             action_preferences += preferences
         if self.debug:
             print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
+        action_preferences = action_preferences / np.sum(action_preferences)
+        if self.debug:
+            print(f'Normalized preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
         return action_preferences
 
     def get_action_preferences_agg(self, agent_id: int) -> np.ndarray:
@@ -313,10 +307,6 @@ class SetFocalRegions:
             print('=' * 60)
         return action_preferences
 
-    def sigmoid(self, x: np.ndarray) -> float:
-        exponent = -self.steepness * np.exp(x - self.c)
-        return 1 / (1 + np.exp(exponent))
-
     def normalized_logistic(self, x: np.ndarray) -> float:
         """
         Normalized logistic map [0,1] -> [0,1].
@@ -345,6 +335,32 @@ class SetFocalRegions:
         # shift and scale so that f(0)==0 and f(1)==1
         return (raw - raw0) / (raw1 - raw0)
 
+    def equal_region_sizes(self, list_regions: List[List[FocalRegion]]) -> List[List[FocalRegion]]:
+        '''Making sure all regions have the same length'''
+        #----------------------------------------
+        # Finding lengths of each type of region
+        #----------------------------------------
+        m = len(list_regions)
+        lengths = [len(regions) for regions in list_regions]
+        n = self.max_regions // m
+        res = self.max_regions % m
+        target_lengths = [n] * m
+        target_lengths[0] += res
+        #----------------------------------------
+        # Equalizing
+        #----------------------------------------
+        for i, regions in enumerate(list_regions):
+            if len(regions) > target_lengths[i]:
+                idx_regions = self.rng.choice(
+                    range(len(regions)),
+                    size=target_lengths[i],
+                    replace=False
+                )
+                list_regions[i] = [regions[i] for i in idx_regions]
+            elif len(regions) < target_lengths[i]:
+                idx_regions = [i % len(regions) for i in range(target_lengths[i])]
+                list_regions[i] = [regions[i] for i in idx_regions]
+        return [region for sublist in list_regions for region in sublist]
 
     def __str__(self):
         cadena = ''
