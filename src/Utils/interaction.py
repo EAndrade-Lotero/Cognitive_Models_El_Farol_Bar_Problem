@@ -169,6 +169,10 @@ class Episode :
                 print('\n' + '='*10 + f'Episode {t}' + '='*10 + '\n')
             # Reset environment for new episode
             self.environment.reset()
+            # Check if focal regions are used
+            agent = self.agents[0] 
+            if hasattr(agent, 'sfr'):
+                self.stir_focal_regions()
             # Run the episode
             self.run(verbose=verbose)
             data_frames.append(self.to_pandas())
@@ -188,6 +192,31 @@ class Episode :
             clear_output(wait=True)
             self.environment.render(folder=folder)
             sleep(self.sleep_time)
+
+    def stir_focal_regions(self):
+        '''
+        If agents use focal regions, restart them
+        '''
+        # Get values from agents
+        len_history = self.agents[0].len_history
+        threshold = self.agents[0].threshold
+        # Create set of focal regions
+        sfr = SetFocalRegions(
+            num_agents=len(self.agents),
+            threshold=threshold,
+            len_history=len_history, 
+        )
+        if hasattr(self.agents[0], 'max_regions'):
+            sfr.max_regions = self.agents[0].max_regions
+        if hasattr(self.agents[0], 'c'):
+            sfr.c = self.agents[0].c
+        if hasattr(self.agents[0], 'steepness'):
+            sfr.steepness = self.agents[0].steepness
+        sfr.generate_focal_regions()
+        for agent in self.agents:
+            agent.fixed_parameters['sfr'] = sfr
+            agent.sfr = sfr
+
 
 
 class Experiment :
@@ -601,6 +630,70 @@ class Performer :
             return latex_string
 
     @staticmethod
+    def sim(                
+                agent_class: CogMod,
+                fixed_parameters: Dict[str, any],
+                free_parameters: Dict[str, any],
+                simulation_parameters: Dict[str, any],
+                new_file: Optional[bool]=True,
+                random_seed: Optional[int]=42
+            ) -> None:
+        num_agents = fixed_parameters['num_agents']
+        threshold = fixed_parameters['threshold']
+        num_rounds = simulation_parameters['num_rounds']
+        num_episodes = simulation_parameters['num_episodes']
+        verbose = simulation_parameters['verbose']
+        # #-------------------------------
+        # # Check if focal regions are required
+        # #-------------------------------
+        # if 'FRA' in agent_class.name():
+        #     # Create set of focal regions
+        #     sfr = SetFocalRegions(
+        #         num_agents=fixed_parameters['num_agents'],
+        #         threshold=fixed_parameters['threshold'],
+        #         len_history=free_parameters['len_history'], 
+        #         max_regions=free_parameters['max_regions']
+        #     )
+        #     sfr.generate_focal_regions()
+        #     fixed_parameters['sfr'] = sfr
+        #-------------------------------
+        # Create agents
+        #-------------------------------
+        agents = [
+            agent_class(
+                free_parameters=free_parameters, 
+                fixed_parameters=fixed_parameters, 
+                n=n
+            ) for n in range(num_agents)
+        ]
+        #-------------------------------
+        # Create bar
+        #-------------------------------
+        bar = Bar(num_agents=num_agents, threshold=threshold)
+        #-------------------------------
+        # Create simulation
+        #-------------------------------
+        episode = Episode(
+            environment=bar,\
+            agents=agents,\
+            model='',\
+            num_rounds=num_rounds
+        )
+        #-------------------------------
+        # Run simulation per seed
+        #-------------------------------
+        seed(random_seed)
+        rng = np.random.default_rng(random_seed)
+        #-------------------------------
+        # Run simulation
+        #-------------------------------
+        df = episode.simulate(
+            num_episodes=num_episodes,
+            verbose=verbose
+        )
+        return df
+
+    @staticmethod
     def sweep(
                 agent_class: CogMod,
                 fixed_parameters: Dict[str, any],
@@ -853,5 +946,4 @@ class Performer :
         # Clean plot memory
         plt.close()
         return experiment.latex_string
-
 

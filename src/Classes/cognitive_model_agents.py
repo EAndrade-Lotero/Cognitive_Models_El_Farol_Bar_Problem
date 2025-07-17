@@ -1838,22 +1838,28 @@ class FocalRegionAgent(CogMod):
                 free_parameters:Dict[str,any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.len_history = free_parameters['len_history']
+        # Create set of focal regions
         sfr = SetFocalRegions(
-            num_agents=self.num_agents,
-            threshold=self.threshold,
-            len_history=self.len_history, 
-            max_regions=free_parameters['max_regions']
+            num_agents=self.fixed_parameters['num_agents'],
+            threshold=self.fixed_parameters['threshold'],
+            len_history=self.free_parameters['len_history'], 
         )
+        self.len_history = free_parameters['len_history']
+        if 'max_regions' in free_parameters.keys():
+            self.max_regions = free_parameters['max_regions']
+            sfr.max_regions = free_parameters['max_regions']
+        if 'c' in free_parameters.keys():
+            self.c = free_parameters['c']
+            sfr.c = free_parameters['c']
+        if 'steepness' in free_parameters.keys():
+            self.steepness = free_parameters['steepness']
+            sfr.steepness = free_parameters['steepness']
         sfr.generate_focal_regions()
         self.sfr = sfr
-        self.c = free_parameters['c']
 
     def determine_action_preferences(self) -> List[float]:
         # Get preferences based on Jaccard distance
-        raw_preferences = self.sfr.get_action_preferences(self.number)
-        # Get exponential preferences
-        preferences = np.exp(self.c * raw_preferences)
+        preferences = self.sfr.get_action_preferences(self.number)
         if self.debug:
             print(f'Preferences: {preferences}')
         return preferences
@@ -1872,8 +1878,8 @@ class FocalRegionAgent(CogMod):
         return {
             'inverse_temperature': (1, 64),
             'len_history': (1, num_agents + 1),
-            'max_regions': (1, 10),
-            'c': (0, 3),
+            'c': (0.5, 1)
+            # 'max_regions': (1, 10),
         }
 
 
@@ -1899,26 +1905,32 @@ class Titan(AttendanceM2):
                 free_parameters:Dict[str,any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.len_history = free_parameters['len_history']
+        # Create set of focal regions
         sfr = SetFocalRegions(
-            num_agents=self.num_agents,
-            threshold=self.threshold,
-            len_history=self.len_history, 
-            max_regions=free_parameters['max_regions']
+            num_agents=self.fixed_parameters['num_agents'],
+            threshold=self.fixed_parameters['threshold'],
+            len_history=self.free_parameters['len_history'], 
         )
+        self.len_history = free_parameters['len_history']
+        if 'max_regions' in free_parameters.keys():
+            self.max_regions = free_parameters['max_regions']
+            sfr.max_regions = free_parameters['max_regions']
+        if 'c' in free_parameters.keys():
+            self.c = free_parameters['c']
+            sfr.c = free_parameters['c']
+        if 'steepness' in free_parameters.keys():
+            self.steepness = free_parameters['steepness']
+            sfr.steepness = free_parameters['steepness']
         sfr.generate_focal_regions()
         self.sfr = sfr
-        self.c = free_parameters['c']
         self.delta = free_parameters['delta']
 
     def determine_action_preferences(self) -> List[float]:
-        Q_s_a = super().determine_action_preferences()
+        Q_preferences = super().determine_action_preferences()
         # Get preferences based on Jaccard similarity
-        raw_preferences = self.sfr.get_action_preferences(self.number)
-        # Get exponential preferences
-        FRA_preferences = np.exp(self.c * raw_preferences)
+        FRA_preferences = self.sfr.get_action_preferences(self.number)
         # Add up preferences
-        preferences = self.delta * FRA_preferences + (1 - self.delta) * Q_s_a
+        preferences = self.delta * FRA_preferences + (1 - self.delta) * Q_preferences
         if self.debug:
             print(f'Preferences: {preferences}')
         return preferences
@@ -1939,9 +1951,9 @@ class Titan(AttendanceM2):
             'bias': (0, 1),
             'learning_rate': (0, 1),
             'len_history': (1, num_agents + 1),
-            'max_regions': (1, 10),
-            'c': (0, 3),
-            'delta': (0, 1),
+            'c': (0.5, 1),
+            # 'max_regions': (1, 10),
+            'delta': (0, 0.1),
         }
 
 

@@ -427,7 +427,7 @@ class GetMeasurements :
         #-----------------------------
         self.group_column = PPT.get_group_column(self.data.columns)
         self.num_players_column = PPT.get_num_player_column(self.data.columns)
-        columns = ['model', 'treatment', 'threshold', self.group_column, self.num_players_column]
+        columns = ['model', 'treatment', 'threshold', self.num_players_column, self.group_column]
         if per_round:
             columns.append('round')
         self.per_round = per_round
@@ -499,15 +499,8 @@ class GetMeasurements :
             return 'conditional_entropy'
     
     def keep_last_rounds(self) -> None:
-        df_list = list()
-        columns = [self.group_column]
-        if 'threshold' in self.data.columns:
-            columns.append('threshold')
-        for key, grp in self.data.groupby(columns):
-            num_rounds = max(grp["round"].unique())
-            grp_aux = pd.DataFrame(grp[grp['round'] >= (num_rounds - self.T)]).reset_index(drop=True)
-            df_list.append(grp_aux)
-        self.data = pd.concat(df_list, ignore_index=True)
+        num_rounds = max(self.data["round"].unique())
+        self.data = self.data[self.data["round"] >= (num_rounds - self.T)].reset_index(drop=True)
 
     @staticmethod
     def attendance(df: pd.DataFrame) -> float:

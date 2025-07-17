@@ -23,8 +23,7 @@ class FocalRegion:
         '''Jaccard similarity score between two regions.'''
         return np.sum(region1 == region2) / np.prod(region1.shape)
         
-    def get_region(self, history: np.ndarray, idx:int) -> np.ndarray:
-        n_cols = history.shape[1]
+    def get_region(self, n_cols: int, idx:int) -> np.ndarray:
         if idx + n_cols <= self.focal_region.shape[1]:
             region = self.focal_region[:, idx:idx+n_cols]
         else:
@@ -40,8 +39,9 @@ class FocalRegion:
     def get_similarity_scores(self, history: np.ndarray) -> List[float]:
         scores = []
         for i in range(self.focal_region.shape[1]):
-            region = self.get_region(history, i)
-            score = self.similarity_score(region, history)
+            n_cols = history.shape[1]
+            region = self.get_region(n_cols, i)
+            score = self.similarity_score(history, region)
             scores.append(score)
             if self.debug:
                 print(f'\tCicle from column {i}:\n{region}')
@@ -151,13 +151,17 @@ class SetFocalRegions:
                 num_agents: int, 
                 threshold: float,
                 len_history: int,
-                max_regions: Optional[int] = 1,
+                c: Optional[float] = 0.5,
+                steepness: Optional[float] = 10,
+                max_regions: Optional[int] = 10,
                 seed: Optional[Union[int, None]] = None
             ) -> None:
         self.num_agents = num_agents
         self.threshold = threshold
-        self.len_history = int(len_history)
         self.B = int(num_agents * threshold)
+        self.len_history = int(len_history)
+        self.c = c
+        self.steepness = steepness
         self.focal_regions = []
         self.max_regions = int(max_regions)
         self.history = None
@@ -188,14 +192,18 @@ class SetFocalRegions:
         '''Generates focal regions.'''
         fair_regions = self.generate_fair_regions()
         segmented_regions = self.generate_segmented_regions()
+        print(f"Num. fair regions: {len(fair_regions)}")
+        print(f"Num. segmented regions: {len(segmented_regions)}")
         regions = fair_regions + segmented_regions
-        num_regions = min(self.max_regions, len(regions))
-        idx_regions = self.rng.choice(
-            range(len(regions)),
-            size=num_regions,
-            replace=False
-        )
-        self.focal_regions = [regions[i] for i in idx_regions]
+        if len(regions) > self.max_regions:
+            idx_regions = self.rng.choice(
+                range(len(regions)),
+                size=self.max_regions,
+                replace=False
+            )
+            self.focal_regions = [regions[i] for i in idx_regions]
+        else:
+            self.focal_regions = regions
 
     def generate_segmented_regions(self) -> List[FocalRegion]:
         regions = []
@@ -231,19 +239,119 @@ class SetFocalRegions:
         return regions
 
     def get_action_preferences(self, agent_id: int) -> np.ndarray:
+        # Clipping history
         self.history = self.history[:, -self.len_history:]
+        # Print for debug
+        if self.debug:
+            print('='*60)
+            print(f"Considering preferences from the viewpoint of agent {agent_id}")
+            print('-'*60)
+        action_preferences = np.zeros(2)
+        for i, region in enumerate(self.focal_regions):
+            raw_preferences = region.get_action_preferences(self.history, agent_id)
+            # preferences = self.sigmoid(raw_preferences)
+            preferences = self.normalized_logistic(raw_preferences)
+            if self.debug:
+                print(f'Similarities according to region {i}: {raw_preferences}')
+                print(f'\tSigmoid similarities: {preferences}')
+            action_preferences += preferences
+        if self.debug:
+            print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
+        return action_preferences
+
+    def get_action_preferences_agg(self, agent_id: int) -> np.ndarray:
+        # Clipping history
+        self.history = self.history[:, -self.len_history:]
+        # Print for debug
+        if self.debug:
+            print('='*60)
+            print(f"Considering preferences from the viewpoint of agent {agent_id}")
+            print('-'*60)
         action_preferences = np.zeros(2)
         for i, region in enumerate(self.focal_regions):
             preferences = region.get_action_preferences(self.history, agent_id)
             if self.debug:
-                print(f'Region {i}: {preferences}')
+                print(f'Preferences according to region {i}: {preferences}')
             action_preferences += preferences
+        if self.debug:
+            print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
         return action_preferences
+
+    def get_action_preferences_max(self, agent_id: int) -> np.ndarray:
+        # Clipping history
+        self.history = self.history[:, -self.len_history:]
+        # Print for debug
+        if self.debug:
+            print('='*60)
+            print(f"Considering preferences from the viewpoint of agent {agent_id}")
+            print('-'*60)
+        # Finding preferences
+        all_preferences = np.zeros((len(self.focal_regions), 2))
+        for i, region in enumerate(self.focal_regions):
+            preferences = region.get_action_preferences(self.history, agent_id)
+            if self.debug:
+                print(f'Preferences according to region {i}: {preferences}')
+            all_preferences[i, :] = preferences
+        # Find max preference
+        max_preference = all_preferences.max()
+        # Get all best regions
+        closest_regions_idx = []
+        for i, region in enumerate(self.focal_regions):
+            if all_preferences[i, :].max() == max_preference:
+                closest_regions_idx.append(i)
+        # Choose only one region and find action preferences
+        max_region = np.random.choice(closest_regions_idx)
+        action_preferences = all_preferences[max_region, :]
+        if self.debug:
+            print('-' * 60)
+            if len(closest_regions_idx) > 1:
+                print(f'Regions with max preferences: {closest_regions_idx}')
+                print(f'Chosen region: {max_region}')
+            else:
+                print(f'Region with max preferences: {max_region}')
+            print(f'Max preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
+            print('=' * 60)
+        return action_preferences
+
+    def sigmoid(self, x: np.ndarray) -> float:
+        exponent = -self.steepness * np.exp(x - self.c)
+        return 1 / (1 + np.exp(exponent))
+
+    def normalized_logistic(self, x: np.ndarray) -> float:
+        """
+        Normalized logistic map [0,1] -> [0,1].
+
+        Parameters
+        ----------
+        x : float
+            Input in [0,1].
+        steepness : float
+            Controls the slope of the transition. Higher = sharper.
+        threshold : float
+            The midpoint of the S‐curve (where f(x)=0.5).
+
+        Returns
+        -------
+        float
+            f(x) in [0,1].
+        """
+        # raw logistic
+        raw = 1.0 / (1.0 + np.exp(-self.steepness * (x - self.c)))
+
+        # compute endpoints
+        raw0 = 1.0 / (1.0 + np.exp( self.steepness * self.c))      # f(0) before normalization
+        raw1 = 1.0 / (1.0 + np.exp(-self.steepness * (1.0 - self.c)))  # f(1) before normalization
+
+        # shift and scale so that f(0)==0 and f(1)==1
+        return (raw - raw0) / (raw1 - raw0)
+
 
     def __str__(self):
         cadena = ''
-        for region in self.focal_regions:
-            cadena += str(region)
+        for i, region in enumerate(self.focal_regions):
+            cadena += '=' * 60 + '\n'
+            cadena += f"Region {i}\n"
+            cadena += str(region) + '\n'
         return cadena
 
 

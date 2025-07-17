@@ -185,6 +185,17 @@ class GetEpisodeLikelihood :
         '''
         Initialize the agents with the given parameters.
         '''
+        # # Check if focal regions are used
+        # if 'FRA' in self.model.name():
+        #     # Create set of focal regions
+        #     sfr = SetFocalRegions(
+        #         num_agents=self.fixed_parameters['num_agents'],
+        #         threshold=self.fixed_parameters['threshold'],
+        #         len_history=self.free_parameters['len_history'], 
+        #         max_regions=self.free_parameters['max_regions']
+        #     )
+        #     sfr.generate_focal_regions()
+        #     self.fixed_parameters['sfr'] = sfr
         # Checks if agents exist
         if self.agents is not None:
             for n, agent in self.agents.items():
