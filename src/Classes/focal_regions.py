@@ -15,9 +15,17 @@ class FocalRegion:
     Determines next action based on the focal region.
     '''
 
-    def __init__(self, focal_region: np.ndarray):
+    def __init__(self, 
+                focal_region: np.ndarray,
+                c: Optional[float] = 0.9,
+                steepness: Optional[float] = 10,
+            ) -> None:
+        assert(isinstance(focal_region, np.ndarray)), f"Error: region should be an np.ndarray, not {type(focal_region)}"
         self.focal_region = focal_region
+        self.c = c
+        self.steepness = steepness
         self.debug = False
+        self.shape = focal_region.shape
 
     def similarity_score(self, region1: np.ndarray, region2: np.ndarray) -> float:
         '''Jaccard similarity score between two regions.'''
@@ -38,6 +46,8 @@ class FocalRegion:
 
     def get_similarity_scores(self, history: np.ndarray) -> List[float]:
         scores = []
+        if self.debug:
+            print('='*60)
         for i in range(self.focal_region.shape[1]):
             n_cols = history.shape[1]
             region = self.get_region(n_cols, i)
@@ -46,6 +56,7 @@ class FocalRegion:
             if self.debug:
                 print(f'\tCicle from column {i}:\n{region}')
                 print(f'\tSimilarity score: {score}')
+                print('-'*60)
         return scores
 
     def get_action_preferences(
@@ -55,13 +66,48 @@ class FocalRegion:
             ) -> np.ndarray:
         scores = self.get_similarity_scores(history)
         if self.debug:
+            print('-'*60)
+            print(f'Scores: {scores}')
+            print(f'Finding preferences for player {agent_id} according to region')
+        action_preferences = np.zeros(2)
+        num_columns_region = self.focal_region.shape[1]
+        len_history = history.shape[1]
+        for idx_col in range(num_columns_region):
+            # Align history with region at column idx and find next column idx
+            next_idx_col = (idx_col + len_history) % num_columns_region
+            # Find action according to pattern at next column idx
+            action = int(self.focal_region[agent_id, next_idx_col])
+            if self.debug:
+                msg = f"Pattern at column {idx_col} assigns similarity {scores[idx_col]} to action={'go' if action == 1 else 'no-go'}"
+                print(msg)
+            # Assign preferences according to similarity score
+            raw_preferences = np.zeros(2)
+            raw_preferences[action] = scores[idx_col]
+            raw_preferences[1 - action] = 1 - scores[idx_col]
+            if self.debug:
+                print(f"\tRaw preferences: {raw_preferences}")
+            # Pass through logistic
+            logistic_preferences = self.normalized_logistic(raw_preferences)
+            if self.debug:
+                print(f"\tLogistic preferences: {logistic_preferences}")
+            # Add to action preferences
+            action_preferences += logistic_preferences
+        if self.debug:
+            print(f"Added and normalized preferences: {action_preferences}")
+            print('-'*60)
+        return action_preferences
+
+    def get_action_preferences_max(
+                self, 
+                history: np.ndarray,
+                agent_id: int
+            ) -> np.ndarray:
+        scores = self.get_similarity_scores(history)
+        if self.debug:
             print(f'Scores: {scores}')
         idx_similarity = np.argmax(scores)
-        # print(f'Idx similarity: {idx_similarity}')
         idx_col = (idx_similarity + history.shape[1]) % self.focal_region.shape[1]
-        # print(f'Idx col: {idx_col}')        
         action = int(self.focal_region[agent_id, idx_col])
-        # print(f'Action: {action}')
         action_preferences = np.zeros(2)
         action_preferences[action] = scores[idx_similarity]
         return action_preferences
@@ -143,6 +189,34 @@ class FocalRegion:
             plt.savefig(file, dpi=300)
         return axes
 
+    def normalized_logistic(self, x: np.ndarray) -> float:
+        """
+        Normalized logistic map [0,1] -> [0,1].
+
+        Parameters
+        ----------
+        x : float
+            Input in [0,1].
+        steepness : float
+            Controls the slope of the transition. Higher = sharper.
+        threshold : float
+            The midpoint of the S‐curve (where f(x)=0.5).
+
+        Returns
+        -------
+        float
+            f(x) in [0,1].
+        """
+        # raw logistic
+        raw = 1.0 / (1.0 + np.exp(-self.steepness * (x - self.c)))
+
+        # compute endpoints
+        raw0 = 1.0 / (1.0 + np.exp( self.steepness * self.c))      # f(0) before normalization
+        raw1 = 1.0 / (1.0 + np.exp(-self.steepness * (1.0 - self.c)))  # f(1) before normalization
+
+        # shift and scale so that f(0)==0 and f(1)==1
+        return (raw - raw0) / (raw1 - raw0)
+
 
 class SetFocalRegions:
     '''Set of focal regions to be shared by all agents.'''
@@ -151,8 +225,8 @@ class SetFocalRegions:
                 num_agents: int, 
                 threshold: float,
                 len_history: int,
-                c: Optional[float] = 0.5,
-                steepness: Optional[float] = 10,
+                c: Optional[float] = 0.9,
+                steepness: Optional[float] = 20,
                 max_regions: Optional[int] = 10,
                 seed: Optional[Union[int, None]] = None
             ) -> None:
@@ -198,19 +272,32 @@ class SetFocalRegions:
 
     def generate_segmented_regions(self) -> List[FocalRegion]:
         regions = []
-        goers = combinations(range(self.num_agents), self.B)
-        for goers in goers:
-            region = np.zeros((self.num_agents, 1))
-            region[goers, 0] = 1
-            go_agents = np.concatenate([region]*self.num_agents, axis=1)
-            regions.append(FocalRegion(go_agents))
+        for region in self.cherrypick.get_all_standard_segmented_equilibriums(period=self.num_agents):
+            region_ = FocalRegion(
+                focal_region=region,
+                c=self.c,
+                steepness=self.steepness
+            )
+            regions.append(region_)
         return regions
 
     def generate_fair_regions(self) -> List[FocalRegion]:
+        regions = []
+        for region in self.cherrypick.get_all_standard_fair_periodic_equilibrium(period=self.num_agents):
+            region_ = FocalRegion(
+                focal_region=region,
+                c=self.c,
+                steepness=self.steepness
+            )
+            regions.append(region_)
+        return regions
+
+    def generate_fair_regions_deprecated(self) -> List[FocalRegion]:
         region_strings = [] 
         regions = []
         equilibrium = self.cherrypick.get_fair_periodic_equilibrium(period=self.num_agents)
-        for variation in permutations(range(equilibrium.shape[1]), self.num_agents):
+        num_rows_region = equilibrium.shape[0]
+        for variation in permutations(range(num_rows_region)):
             # print(f'Variation: {variation}')
             indices = np.array(variation)
             good_variation = True
@@ -223,7 +310,12 @@ class SetFocalRegions:
                     break
             if good_variation:
                 region = equilibrium[:, indices]
-                regions.append(FocalRegion(region))
+                region_ = FocalRegion(
+                    focal_region=region,
+                    c=self.c,
+                    steepness=self.steepness
+                )
+                regions.append(FocalRegion(region_))
                 region_strings.append(str(indices))
                 if self.max_regions is not None and len(self.focal_regions) >= self.max_regions:
                     break
@@ -248,7 +340,7 @@ class SetFocalRegions:
             action_preferences += preferences
         if self.debug:
             print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
-        action_preferences = action_preferences / np.sum(action_preferences)
+        action_preferences /= np.sum(action_preferences)
         if self.debug:
             print(f'Normalized preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
         return action_preferences

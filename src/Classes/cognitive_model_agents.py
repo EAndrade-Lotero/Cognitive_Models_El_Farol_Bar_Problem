@@ -1883,7 +1883,7 @@ class FocalRegionAgent(CogMod):
         }
 
 
-class Titan(AttendanceM2):
+class FRAplus(AttendanceM2):
     def __init__(
                 self, 
                 free_parameters:Optional[Dict[str,any]]={}, 
@@ -1953,7 +1953,7 @@ class Titan(AttendanceM2):
             'len_history': (1, num_agents + 1),
             'c': (0.5, 1),
             # 'max_regions': (1, 10),
-            'delta': (0, 0.1),
+            'delta': (0, 0.2),
         }
 
 
@@ -1967,7 +1967,7 @@ MODELS = [
     AvailableSpaceM1, AvailableSpaceM2, AvailableSpaceM3,
     FairnessM1, FairnessM2, FairnessM3,
     MFPM1, MFPM2, MFPM3, 
-    FocalRegionAgent, Titan
+    FocalRegionAgent, FRAplus
 ]
 
 M1_MODELS = [model for model in MODELS if model.name().split('-')[-1] == 'M1']

@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 
 from tqdm.auto import tqdm
-from itertools import permutations
-from typing import Optional, Union, Tuple
+from itertools import permutations, combinations
+from typing import Optional, Union, Tuple, List
 
 from Classes.bar import Bar
 
@@ -107,6 +107,37 @@ class CherryPickEquilibria:
             ] for row in periodic_equilibrium
         ]
         return np.array(new_equilibrium)
+
+    def get_all_standard_segmented_equilibriums(self, period:int) -> List[np.ndarray]:
+        regions = []
+        goers = combinations(range(self.num_agents), self.B)
+        for goers in goers:
+            region = np.zeros((self.num_agents, 1))
+            region[goers, 0] = 1
+            go_agents = np.concatenate([region] * period, axis=1)
+            regions.append(go_agents)
+        return regions
+    
+    def get_all_standard_fair_periodic_equilibrium(self, period:int) -> List[np.ndarray]:
+        # Create base equilibrium
+        base_equilibrium = self.get_fair_periodic_equilibrium(period)
+        num_rows, num_cols = base_equilibrium.shape
+        list_equilibriums = []
+        list_str = []
+        # Permute rows of base equilibrium
+        for row_indices in permutations(range(num_rows)):
+            equilibrium = base_equilibrium[row_indices, :].copy()
+            # Permute columns of base equilibrium and skip if one variation is included
+            included = False
+            for col_idx in range(num_cols):
+                rolled_variation = np.roll(equilibrium, col_idx, axis=1)
+                if str(rolled_variation) in list_str:
+                    included = True
+                    break
+            if not included:
+                list_equilibriums.append(equilibrium)
+                list_str.append(str(equilibrium))
+        return list_equilibriums
 
     def get_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
         # Get number of lowest payoff players in fair configuration
