@@ -478,7 +478,7 @@ class ParameterFit :
         self.model_name = model_name
         self.with_treatment = with_treatment
         self.optimizer_type = optimizer_type
-        self.debug = True
+        self.debug = False
 
     def get_optimal_parameters(
                 self,
