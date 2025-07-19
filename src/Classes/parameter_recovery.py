@@ -478,7 +478,7 @@ class ParameterFit :
         self.model_name = model_name
         self.with_treatment = with_treatment
         self.optimizer_type = optimizer_type
-        self.debug = False
+        self.debug = True
 
     def get_optimal_parameters(
                 self,
@@ -530,27 +530,30 @@ class ParameterFit :
                 )
             else:
                 raise NotImplementedError(f'Optimizer {self.optimizer_type} not implemented!')
-            
 
             # Save results
-            results['model'] = self.agent_class.__name__
-            results['fixed_parameters'] = fixed_parameters
+            dict_results = dict()
+            dict_results['model'] = self.agent_class.__name__
+            dict_results['fixed_parameters'] = fixed_parameters
 
             if self.optimizer_type == 'bayesian':
-                results['free_parameters'] = optimizer.max['params']
-                results['deviance'] = optimizer.max['target']
+                dict_results['free_parameters'] = optimizer.max['params']
+                dict_results['deviance'] = optimizer.max['target']
             elif self.optimizer_type == 'scipy':
-                results['free_parameters'] = {parameter:result.x[i] for i, parameter in enumerate(free_parameters.keys())}
-                results['deviance'] = -result.fun
-            k = len(results['free_parameters'])
-            dev = results['deviance']
-            results['AIC'] = 2*k - 2*dev
+                dict_results['free_parameters'] = {parameter:result.x[i] for i, parameter in enumerate(free_parameters.keys())}
+                dict_results['deviance'] = -result.fun
+            k = len(dict_results['free_parameters'])
+            dev = dict_results['deviance']
+            dict_results['AIC'] = 2*k - 2*dev
 
             if self.debug:
-                print(f'Optimal parameters for {num_ag} players and threshold {threshold}:\n{results["free_parameters"]}')
-                print(f'Deviance: {results["deviance"]}')
-                print(f'AIC: {results["AIC"]}')
+                print(f'Optimal parameters for {num_ag} players and threshold {threshold}:\n{dict_results["free_parameters"]}')
+                print(f'Deviance: {dict_results["deviance"]}')
+                print(f'AIC: {dict_results["AIC"]}')
                 print('-'*50)
+
+            name = f'{self.agent_class.name()}_N={num_ag}_mu={threshold}'
+            results[name] = dict_results
 
         return results
     
@@ -578,7 +581,8 @@ class ParameterFit :
             f=pr.black_box_function,
             pbounds=pbounds,
             random_state=1,
-            allow_duplicate_points=False ###########################
+            allow_duplicate_points=False,
+            verbose=0
         )
         return optimizer
 
@@ -633,44 +637,7 @@ class ParameterFit :
         assert (pbounds is not None), f'No bounds for {self.agent_class.name()}'
         free_parameters = {parameter:np.nan for parameter in pbounds.keys()}
         return free_parameters, pbounds
-
-    def get_saved_bounds(
-                self, 
-                parameter:str,
-            ) -> Tuple[float]:
-        '''Returns the known bounds for given parameter'''
-        #------------------------------------------
-        # Random
-        #------------------------------------------
-        if parameter == 'go_prob':
-            return {'go_prob':(0, 1)}
-        #------------------------------------------
-        #Other cognitive models
-        #------------------------------------------
-        elif parameter == 'inverse_temperature':
-            return {'inverse_temperature':(4, 32)}
-        #------------------------------------------
-        # WSLS
-        #------------------------------------------
-        if parameter == 'go_drive':
-            return {'go_drive':(0, 1)}
-        if parameter == 'wsls_strength':
-            return {'wsls_strength':(0, 2)}
-        #------------------------------------------
-        # Error-driven
-        #------------------------------------------
-        if parameter == 'learning_rate':
-            return {'learning_rate':(0, 1)}
-        if parameter == 'bias':
-            return {'bias':(0, 1)}
-        #------------------------------------------
-        # MFP
-        #------------------------------------------
-        if parameter == 'belief_strength':
-            return {'belief_strength':(1, 100)}
-        else:
-            raise Exception(f'Parameter {parameter} not known!')
-    
+  
     @staticmethod
     def run(
                 data: pd.DataFrame, 
@@ -708,6 +675,8 @@ class ParameterFit :
                 print('Running optimizer...')
                 res = pf.get_optimal_parameters(hyperparameters)
                 best_fit.update(res)
+
+                print(best_fit)
 
                 # Write one JSON object per line
                 f.write(json.dumps(best_fit) + '\n')        
