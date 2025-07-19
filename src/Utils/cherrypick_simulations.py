@@ -139,8 +139,30 @@ class CherryPickEquilibria:
                 list_str.append(str(equilibrium))
         return list_equilibriums
 
+    def get_all_standard_mixed_periodic_equilibrium(self, period:int) -> List[np.ndarray]:
+        list_equilibriums = []
+        list_str = []
+        for num_seg in range(1, self.B):
+            # Get mixed periodic equilibrium
+            mixed_equilibrium = self.get_mixed_periodic_equilibrium(num_seg, period)
+            num_rows, num_cols = mixed_equilibrium.shape
+            # Permute rows of base equilibrium
+            for row_indices in permutations(range(num_rows)):
+                equilibrium = mixed_equilibrium[row_indices, :].copy()
+                # Permute columns of base equilibrium and skip if one variation is included
+                included = False
+                for col_idx in range(num_cols):
+                    rolled_variation = np.roll(equilibrium, col_idx, axis=1)
+                    if str(rolled_variation) in list_str:
+                        included = True
+                        break
+                if not included:
+                    list_equilibriums.append(equilibrium)
+                    list_str.append(str(equilibrium))
+        return list_equilibriums
+
     def get_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
-        # Get number of lowest payoff players in fair configuration
+        # Get number of lowest payoff players
         L = self.num_agents - self.B
         # Creare array with player's decisions
         go_array = np.zeros((self.num_agents, period))
@@ -154,7 +176,41 @@ class CherryPickEquilibria:
         if self.debug:
             print(f'Periodic equilibrium:\n{go_array}')            
         return go_array
-        
+
+    def get_mixed_periodic_equilibrium(self, num_seg:int, period:int) -> np.ndarray:
+        assert(num_seg > 0), f'Number of agents always going to the bar (num_seg={num_seg}) must be positive'
+        assert(num_seg < self.B), f'Number of agents always going to the bar (num_seg={num_seg}) cannot be higher than, or equal to, the bar capacity (B={self.B})'
+        # Get number of alternating players
+        num_alt = self.num_agents - num_seg
+        # Creare array with player's decisions
+        # Get number of lowest payoff players
+        L = self.num_agents - self.B
+        go_array = np.zeros((self.num_agents, period))
+        # Create basic one-shot equilibrium
+        go_agents = np.concatenate([np.ones((self.B,)), np.zeros((L,))]) 
+        # Permute one-shot equilibrium
+        for i in range(period):
+            index = num_seg + (i % num_alt)
+            round_go_agents = np.concatenate([
+                go_agents[:num_seg],
+                go_agents[index:], 
+                go_agents[num_seg:index]
+            ])
+            go_array[:,i] = round_go_agents    
+        if self.debug:
+            print(f'Periodic equilibrium:\n{go_array}')            
+        return go_array
+
+    def get_segmented_equilibrium(self, period:int) -> np.ndarray:
+        go_agents = self.random_one_shot_equilibrium()
+        one_shot_equilibrium = np.zeros((self.num_agents,))
+        one_shot_equilibrium[go_agents] = 1
+        equilibrium = [one_shot_equilibrium.tolist()  for _ in range(period)]
+        equilibrium = np.array(equilibrium).T
+        if self.debug:
+            print(f'Segmented equilibrium:\n{equilibrium}')
+        return equilibrium
+
     def get_num_highest_payoff_players(self, period:int) -> int:
         # Initialize records
         num_highest_payoff_players = None
@@ -196,16 +252,6 @@ class CherryPickEquilibria:
             print(f'Lowest fair quantity: {low_fair_quantity}')
             print(f'Highest fair quantity: {high_fair_quantity}')        
         return low_fair_quantity, high_fair_quantity
-
-    def get_segmented_equilibrium(self, period:int) -> np.ndarray:
-        go_agents = self.random_one_shot_equilibrium()
-        one_shot_equilibrium = np.zeros((self.num_agents,))
-        one_shot_equilibrium[go_agents] = 1
-        equilibrium = [one_shot_equilibrium.tolist()  for _ in range(period)]
-        equilibrium = np.array(equilibrium).T
-        if self.debug:
-            print(f'Segmented equilibrium:\n{equilibrium}')
-        return equilibrium
 
     def random_one_shot_equilibrium(self) -> np.ndarray:
         go_agents = self.rng.choice(self.agents, size=self.B, replace=False)

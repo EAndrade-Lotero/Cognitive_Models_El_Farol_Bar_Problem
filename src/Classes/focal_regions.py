@@ -266,8 +266,10 @@ class SetFocalRegions:
         '''Generates focal regions.'''
         fair_regions = self.generate_fair_regions()
         segmented_regions = self.generate_segmented_regions()
-        # regions = fair_regions + segmented_regions
-        regions = self.equal_region_sizes([fair_regions, segmented_regions])
+        mixed_regions = self.generate_mixed_regions()
+        regions = self.equal_region_sizes([
+            fair_regions, segmented_regions, mixed_regions
+        ])
         self.focal_regions = regions
 
     def generate_segmented_regions(self) -> List[FocalRegion]:
@@ -292,33 +294,15 @@ class SetFocalRegions:
             regions.append(region_)
         return regions
 
-    def generate_fair_regions_deprecated(self) -> List[FocalRegion]:
-        region_strings = [] 
+    def generate_mixed_regions(self) -> List[FocalRegion]:
         regions = []
-        equilibrium = self.cherrypick.get_fair_periodic_equilibrium(period=self.num_agents)
-        num_rows_region = equilibrium.shape[0]
-        for variation in permutations(range(num_rows_region)):
-            # print(f'Variation: {variation}')
-            indices = np.array(variation)
-            good_variation = True
-            for i in range(indices.shape[0]):
-                rolled_variation = np.roll(indices, i)
-                # print(f'\tRolled variation: {rolled_variation}')
-                if str(rolled_variation) in region_strings:
-                    # print(f'\t\tRolled variation already in regions: {rolled_variation}')
-                    good_variation = False
-                    break
-            if good_variation:
-                region = equilibrium[:, indices]
-                region_ = FocalRegion(
-                    focal_region=region,
-                    c=self.c,
-                    steepness=self.steepness
-                )
-                regions.append(FocalRegion(region_))
-                region_strings.append(str(indices))
-                if self.max_regions is not None and len(self.focal_regions) >= self.max_regions:
-                    break
+        for region in self.cherrypick.get_all_standard_mixed_periodic_equilibrium(period=self.num_agents):
+            region_ = FocalRegion(
+                focal_region=region,
+                c=self.c,
+                steepness=self.steepness
+            )
+            regions.append(region_)
         return regions
 
     def get_action_preferences(self, agent_id: int) -> np.ndarray:
@@ -343,60 +327,6 @@ class SetFocalRegions:
         action_preferences /= np.sum(action_preferences)
         if self.debug:
             print(f'Normalized preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
-        return action_preferences
-
-    def get_action_preferences_agg(self, agent_id: int) -> np.ndarray:
-        # Clipping history
-        self.history = self.history[:, -self.len_history:]
-        # Print for debug
-        if self.debug:
-            print('='*60)
-            print(f"Considering preferences from the viewpoint of agent {agent_id}")
-            print('-'*60)
-        action_preferences = np.zeros(2)
-        for i, region in enumerate(self.focal_regions):
-            preferences = region.get_action_preferences(self.history, agent_id)
-            if self.debug:
-                print(f'Preferences according to region {i}: {preferences}')
-            action_preferences += preferences
-        if self.debug:
-            print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
-        return action_preferences
-
-    def get_action_preferences_max(self, agent_id: int) -> np.ndarray:
-        # Clipping history
-        self.history = self.history[:, -self.len_history:]
-        # Print for debug
-        if self.debug:
-            print('='*60)
-            print(f"Considering preferences from the viewpoint of agent {agent_id}")
-            print('-'*60)
-        # Finding preferences
-        all_preferences = np.zeros((len(self.focal_regions), 2))
-        for i, region in enumerate(self.focal_regions):
-            preferences = region.get_action_preferences(self.history, agent_id)
-            if self.debug:
-                print(f'Preferences according to region {i}: {preferences}')
-            all_preferences[i, :] = preferences
-        # Find max preference
-        max_preference = all_preferences.max()
-        # Get all best regions
-        closest_regions_idx = []
-        for i, region in enumerate(self.focal_regions):
-            if all_preferences[i, :].max() == max_preference:
-                closest_regions_idx.append(i)
-        # Choose only one region and find action preferences
-        max_region = np.random.choice(closest_regions_idx)
-        action_preferences = all_preferences[max_region, :]
-        if self.debug:
-            print('-' * 60)
-            if len(closest_regions_idx) > 1:
-                print(f'Regions with max preferences: {closest_regions_idx}')
-                print(f'Chosen region: {max_region}')
-            else:
-                print(f'Region with max preferences: {max_region}')
-            print(f'Max preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
-            print('=' * 60)
         return action_preferences
 
     def normalized_logistic(self, x: np.ndarray) -> float:
@@ -432,12 +362,15 @@ class SetFocalRegions:
         #----------------------------------------
         # Finding lengths of each type of region
         #----------------------------------------
-        m = len(list_regions)
         lengths = [len(regions) for regions in list_regions]
+        non_zero_lengths = [l for l in lengths if l > 0]
+        m = len(non_zero_lengths)
         n = self.max_regions // m
         res = self.max_regions % m
-        target_lengths = [n] * m
-        target_lengths[0] += res
+        target_lengths = [n if l > 0 else 0 for l in lengths]
+        first_non_zero_idx = next((i for i, l in enumerate(lengths) if l > 0), None)
+        if first_non_zero_idx is not None:
+            target_lengths[first_non_zero_idx] += res
         #----------------------------------------
         # Equalizing
         #----------------------------------------
@@ -449,7 +382,7 @@ class SetFocalRegions:
                     replace=False
                 )
                 list_regions[i] = [regions[i] for i in idx_regions]
-            elif len(regions) < target_lengths[i]:
+            elif 0 < len(regions) < target_lengths[i]:
                 idx_regions = [i % len(regions) for i in range(target_lengths[i])]
                 list_regions[i] = [regions[i] for i in idx_regions]
         return [region for sublist in list_regions for region in sublist]
