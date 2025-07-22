@@ -108,9 +108,12 @@ class CherryPickEquilibria:
         ]
         return np.array(new_equilibrium)
 
-    def get_all_standard_segmented_equilibriums(self, period:int) -> List[np.ndarray]:
+    def get_all_standard_segmented_equilibriums(self, period:int, max_regions:int=10) -> List[np.ndarray]:
         regions = []
         goers = combinations(range(self.num_agents), self.B)
+        goers = list(goers)
+        if len(goers) > max_regions:
+            goers = goers[:max_regions]
         for goers in goers:
             region = np.zeros((self.num_agents, 1))
             region[goers, 0] = 1
@@ -118,14 +121,18 @@ class CherryPickEquilibria:
             regions.append(go_agents)
         return regions
     
-    def get_all_standard_fair_periodic_equilibrium(self, period:int) -> List[np.ndarray]:
+    def get_all_standard_fair_periodic_equilibrium(self, period:int, max_regions:int=10) -> List[np.ndarray]:
         # Create base equilibrium
         base_equilibrium = self.get_fair_periodic_equilibrium(period)
         num_rows, num_cols = base_equilibrium.shape
         list_equilibriums = []
         list_str = []
         # Permute rows of base equilibrium
-        for row_indices in permutations(range(num_rows)):
+        goers = permutations(range(num_rows))
+        goers = list(goers)
+        if len(goers) > max_regions:
+            goers = goers[:max_regions]
+        for row_indices in goers:
             equilibrium = base_equilibrium[row_indices, :].copy()
             # Permute columns of base equilibrium and skip if one variation is included
             included = False
@@ -139,7 +146,7 @@ class CherryPickEquilibria:
                 list_str.append(str(equilibrium))
         return list_equilibriums
 
-    def get_all_standard_mixed_periodic_equilibrium(self, period:int) -> List[np.ndarray]:
+    def get_all_standard_mixed_periodic_equilibrium(self, period:int, max_regions:int=10) -> List[np.ndarray]:
         list_equilibriums = []
         list_str = []
         for num_seg in range(1, self.B):
@@ -147,7 +154,11 @@ class CherryPickEquilibria:
             mixed_equilibrium = self.get_mixed_periodic_equilibrium(num_seg, period)
             num_rows, num_cols = mixed_equilibrium.shape
             # Permute rows of base equilibrium
-            for row_indices in permutations(range(num_rows)):
+            goers = permutations(range(num_rows))
+            goers = list(goers)
+            if len(goers) > max_regions:
+                goers = goers[:max_regions]
+            for row_indices in goers:
                 equilibrium = mixed_equilibrium[row_indices, :].copy()
                 # Permute columns of base equilibrium and skip if one variation is included
                 included = False

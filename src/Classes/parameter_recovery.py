@@ -407,7 +407,7 @@ class GetDeviance:
             print('Iterating over episodes...')
         # Bookkeeping
         deviances = list()
-        for episode in episodes:
+        for episode in tqdm(episodes, leave=False, desc='Calculating likelihoods'):
             self.process_log['id'].append(episode)
             if self.debug:
                 print('\n' + '-'*50)
