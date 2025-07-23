@@ -7,8 +7,8 @@ from typing import Union
 from itertools import permutations, combinations
 from typing import List, Optional, Dict, Tuple
 
+from Config.config import PATHS
 from Utils.cherrypick_simulations import CherryPickEquilibria
-
 
 class FocalRegion:
     '''
@@ -228,6 +228,7 @@ class SetFocalRegions:
                 c: Optional[float] = 0.9,
                 steepness: Optional[float] = 20,
                 max_regions: Optional[int] = 10,
+                from_file: Optional[bool] = True,
                 seed: Optional[Union[int, None]] = None
             ) -> None:
         self.num_agents = num_agents
@@ -253,6 +254,11 @@ class SetFocalRegions:
         )
         cherrypick.debug = False
         self.cherrypick = cherrypick
+        self.from_file = from_file
+        file = f'{self.max_regions}_regions'
+        file += f'_{self.num_agents}_agents'
+        file += f'_{self.threshold}_threshold.npy'
+        self.file = PATHS['focal_regions_path'] / file
 
     def add_history(self, obs: List[int]) -> None:
         obs_array = np.array(obs).reshape(-1, 1)
@@ -264,13 +270,46 @@ class SetFocalRegions:
 
     def generate_focal_regions(self) -> None:
         '''Generates focal regions.'''
+        if self.from_file and self.file.exists():
+            if self.debug:
+                print(f'Loading focal regions from {self.file}')
+            self.focal_regions = self.load_focal_regions()
+            return
+        if self.debug:
+            print(f'Generating focal regions for {self.num_agents} agents and {self.threshold} threshold')
         fair_regions = self.generate_fair_regions()
         segmented_regions = self.generate_segmented_regions()
         mixed_regions = self.generate_mixed_regions()
+        if self.debug:
+            print('Equalizing region sizes')
         regions = self.equal_region_sizes([
             fair_regions, segmented_regions, mixed_regions
         ])
         self.focal_regions = regions
+        if self.from_file:
+            if self.debug:
+                print(f'Saving focal regions to {self.file}')
+            self.save_focal_regions()
+
+    def load_focal_regions(self) -> List[FocalRegion]:
+        '''Loads focal regions from file.'''
+        if not self.file.exists():
+            raise FileNotFoundError(f"Focal regions file {self.file} does not exist.")
+        data = np.load(self.file, allow_pickle=True)
+        regions = []
+        for region in data:
+            region_ = FocalRegion(
+                focal_region=region,
+                c=self.c,
+                steepness=self.steepness
+            )
+            regions.append(region_)
+        return regions
+
+    def save_focal_regions(self) -> None:
+        '''Saves focal regions to file.'''
+        data = np.array([region.focal_region for region in self.focal_regions])
+        np.save(self.file, data, allow_pickle=True)
 
     def generate_segmented_regions(self) -> List[FocalRegion]:
         regions = []

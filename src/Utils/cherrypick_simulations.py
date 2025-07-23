@@ -112,13 +112,15 @@ class CherryPickEquilibria:
         regions = []
         goers = combinations(range(self.num_agents), self.B)
         goers = list(goers)
-        if len(goers) > max_regions:
-            goers = goers[:max_regions]
+        counter = 0
         for goers in goers:
             region = np.zeros((self.num_agents, 1))
             region[goers, 0] = 1
             go_agents = np.concatenate([region] * period, axis=1)
             regions.append(go_agents)
+            counter += 1
+            if counter >= max_regions:
+                break
         return regions
     
     def get_all_standard_fair_periodic_equilibrium(self, period:int, max_regions:int=10) -> List[np.ndarray]:
@@ -130,8 +132,7 @@ class CherryPickEquilibria:
         # Permute rows of base equilibrium
         goers = permutations(range(num_rows))
         goers = list(goers)
-        if len(goers) > max_regions:
-            goers = goers[:max_regions]
+        counter = 0
         for row_indices in goers:
             equilibrium = base_equilibrium[row_indices, :].copy()
             # Permute columns of base equilibrium and skip if one variation is included
@@ -144,6 +145,9 @@ class CherryPickEquilibria:
             if not included:
                 list_equilibriums.append(equilibrium)
                 list_str.append(str(equilibrium))
+                counter += 1
+            if counter >= max_regions:
+                break
         return list_equilibriums
 
     def get_all_standard_mixed_periodic_equilibrium(self, period:int, max_regions:int=10) -> List[np.ndarray]:
@@ -156,8 +160,7 @@ class CherryPickEquilibria:
             # Permute rows of base equilibrium
             goers = permutations(range(num_rows))
             goers = list(goers)
-            if len(goers) > max_regions:
-                goers = goers[:max_regions]
+            counter = 0
             for row_indices in goers:
                 equilibrium = mixed_equilibrium[row_indices, :].copy()
                 # Permute columns of base equilibrium and skip if one variation is included
@@ -170,6 +173,9 @@ class CherryPickEquilibria:
                 if not included:
                     list_equilibriums.append(equilibrium)
                     list_str.append(str(equilibrium))
+                    counter += 1
+                if counter >= max_regions:
+                    break
         return list_equilibriums
 
     def get_fair_periodic_equilibrium(self, period:int) -> np.ndarray:

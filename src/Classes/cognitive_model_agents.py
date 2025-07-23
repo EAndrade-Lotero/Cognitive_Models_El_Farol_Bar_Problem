@@ -1839,7 +1839,6 @@ class FocalRegionAgent(CogMod):
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         # Create set of focal regions
-        print('Initializing focal regions...')
         sfr = SetFocalRegions(
             num_agents=self.fixed_parameters['num_agents'],
             threshold=self.fixed_parameters['threshold'],
@@ -1855,9 +1854,7 @@ class FocalRegionAgent(CogMod):
         if 'steepness' in free_parameters.keys():
             self.steepness = free_parameters['steepness']
             sfr.steepness = free_parameters['steepness']
-        print('Generating focal regions...')
         sfr.generate_focal_regions()
-        print('Focal regions generated.')
         self.sfr = sfr
 
     def determine_action_preferences(self) -> List[float]:
