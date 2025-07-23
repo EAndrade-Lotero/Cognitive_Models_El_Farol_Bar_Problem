@@ -514,12 +514,14 @@ class ParameterFit :
 
             # Create optimizer
             if self.optimizer_type == 'bayesian':
+                print('Creating Bayesian optimizer...')
                 optimizer = self.create_bayesian_optimizer(
                     data=df,
                     free_parameters=free_parameters, 
                     pbounds=pbounds
                 )
                 # Find optimal parameters
+                print('Finding optimal parameters...')
                 optimizer.maximize(**hyperparameters)
             elif self.optimizer_type == 'scipy':
                 # Find optimal parameters
