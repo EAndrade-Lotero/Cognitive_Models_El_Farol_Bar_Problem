@@ -171,12 +171,10 @@ class PPT :
     def get_number_of_groups(data: pd.DataFrame) -> List[int]:
         num_players_col = PPT.get_num_player_column(data.columns)
         group_column = PPT.get_group_column(data.columns)
-        list_sizes = list()
-        for key, grp in data.groupby([num_players_col, 'threshold']):
-            size = len(grp[group_column].unique())
-            group_size = {'num_episodes':size}
-            list_sizes.append(group_size)
-        return list_sizes
+        dict_sizes = dict()
+        for (num_players, threshold), grp in data.groupby([num_players_col, 'threshold']):
+            dict_sizes[(num_players, threshold)] = grp[group_column].unique().size
+        return dict_sizes
 
 
 class PathUtils :
