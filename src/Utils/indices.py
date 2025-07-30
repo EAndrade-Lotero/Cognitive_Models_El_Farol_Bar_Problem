@@ -1,3 +1,5 @@
+import torch
+import joblib
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -7,13 +9,16 @@ from copy import deepcopy
 from tqdm.auto import tqdm
 from itertools import product
 from typing import Optional, Union, Dict, List
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
+from Config.config import PATHS
+from Classes.NN import SimpleMLP
 from Utils.utils import GetMeasurements
 from Utils.cherrypick_simulations import CherryPickEquilibria
-from Config.config import PATHS
 
 class AlternationIndex:
     '''Estimates the alternation index'''
@@ -33,34 +38,52 @@ class AlternationIndex:
         self.seed = seed
         self.rng = np.random.default_rng(seed=seed)
         self.configuration_points = self.create_configurations()
-        # self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
-        self.measures = ['bounded_efficiency', 'inequality']
+        self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
+        # self.measures = ['bounded_efficiency', 'inequality']
         self.data = None
         self.sklearn_coefficients = None
         self.statsmodels_coefficients = None
-        self.coefficients = None
+        self.model = None
         self.index_path = PATHS['index_path']
         self.priority = 'statsmodels'
         self.debug = True
         self.alternation_threshold = 0.75
 
-    def __call__(self, df:pd.DataFrame) -> float:
+    def __call__(self, df:pd.DataFrame) -> np.ndarray:
         '''Calculate the index from the dataframe'''
-        if self.coefficients is None:
+        # Get index of alternation
+        classes = self.model.named_steps["logisticregression"].classes_.tolist()
+        idx_alternation = classes.index('alternation')
+        # Obtain probabilities from model
+        if self.model is None:
             self.create_index_calculator()
-        assert('bounded_efficiency' in df.columns)
-        # assert('entropy' in df.columns)
-        # assert('conditional_entropy' in df.columns)
-        assert('inequality' in df.columns)
-        # Extract intercept and weights
-        intercept = self.coefficients[0]
-        weights = np.array(self.coefficients[1:])
-        # Compute linear combination
-        linear_combination = np.dot(df[self.measures], weights) + intercept
-        # Sigmoid function
-        probabilities = 1 / (1 + np.exp(-linear_combination))
-        return probabilities
+        df_ = df[self.measures]
+        probabilities = self.model.predict_proba(df_)
+        return probabilities[:, idx_alternation]
     
+    def classify(self, df:pd.DataFrame) -> np.ndarray:
+
+        def get_class(line):
+            thresholds = [x > self.alternation_threshold for x in line]
+            assert(sum(thresholds) <= 1), f"Oops: {line} fits in more than one category with threshold {self.alternation_threshold}"
+            if sum(thresholds) == 0:
+                return 'random'
+            else:
+                idx = thresholds.index(True)
+                return classes[idx]
+
+        '''Classify the simulations from the dataframe'''
+        # Get classes
+        classes = self.model.named_steps["logisticregression"].classes_.tolist()
+        # Obtain probabilities from model
+        if self.model is None:
+            self.create_index_calculator()
+        df_ = df[self.measures]
+        probabilities = self.model.predict_proba(df_)
+        predictions = [get_class(line) for line in probabilities]
+        # predictions = [classes[np.argmax(line)] for line in probabilities]
+        return predictions
+
     def alt_precentage(
                 self, 
                 df: pd.DataFrame,
@@ -83,17 +106,44 @@ class AlternationIndex:
     def create_index_calculator(self) -> None:
         '''Create the index calculator based on the priority'''
         if self.priority == 'sklearn':
-            if self.sklearn_coefficients is None:
-                self.create_index_sklearn()
-            self.coefficients = self.sklearn_coefficients
+            self.create_index_sklearn()
+        elif self.priority == 'mlp':
+            self.create_index_mlp()
         elif self.priority == 'statsmodels':
-            if self.statsmodels_coefficients is None:
-                self.create_index_statsmodels()
-            self.coefficients = self.statsmodels_coefficients
+            raise NotImplementedError('Statsmodels coefficients are not implemented yet')
         else:
             raise ValueError('Priority must be sklearn or statsmodels')        
         
-    def create_index_sklearn(self) -> Dict[str, float]:
+    def create_index_mlp(self) -> None:
+        if self.data is None:
+            # Create dataframe with all data
+            df = self.simulate_data()
+            self.data = df
+        else:
+            df = self.data
+
+        df['target'] = df['data_type'].astype("category")
+        # Split into train/test
+        X_train, X_test, y_train, y_test = train_test_split(
+            df[self.measures], 
+            df['target'], 
+            test_size=0.2,
+            random_state=0, 
+            stratify=df['target']
+        )
+
+        model = SimpleMLP()
+        clf = SimpleMLP(hidden_size=32, epochs=150)
+        clf.fit(X_train, y_train)
+        print("\nTest performance:")
+        clf.evaluate(X_test, y_test)        
+
+        # Save to file
+        index_path = self.index_path / Path('mlp_coefficients.pt')
+        torch.save(clf.model.state_dict(), index_path)
+
+
+    def create_index_sklearn(self) -> None:
         if self.data is None:
             # Create dataframe with all data
             df = self.simulate_data()
@@ -102,31 +152,49 @@ class AlternationIndex:
             df = self.data
         # Create target variable
         # 1 for alternation, 0 for segmentation/random
-        df['target'] = df['data_type'].apply(lambda x: 1 if x == 'alternation' else 0)
+        # df['target'] = df['data_type'].apply(lambda x: 1 if x == 'alternation' else 0)
+        df['target'] = df['data_type'].astype("category")
         # Split into train/test
+
         X_train, X_test, y_train, y_test = train_test_split(
             df[self.measures], 
             df['target'], 
             test_size=0.2,
-            random_state=0
+            random_state=0, 
+            stratify=df['target']
         )
-        # Fit logistic regression
-        clf = LogisticRegression()
-        clf.fit(X_train, y_train)
-        # Predict and evaluate
-        y_pred = clf.predict(X_test)
+
+        pipe = make_pipeline(
+            StandardScaler(with_mean=False),        # sparse‑safe scaler
+            LogisticRegression(
+                penalty="l2",
+                C=1.0,               # inverse of regularization strength
+                solver="lbfgs",      # supports multinomial loss
+                multi_class="multinomial",
+                max_iter=1_000,
+                n_jobs=-1
+            )
+        )
+        pipe.fit(X_train, y_train)
+        y_pred = pipe.predict(X_test)
+        # # Fit logistic regression
+        # clf = LogisticRegression()
+        # clf.fit(X_train, y_train)
+        # # Predict and evaluate
+        # y_pred = clf.predict(X_test)
         print(classification_report(y_test, y_pred))
-        df_index = pd.DataFrame({
-            'measure': ['intercept'] + self.measures,
-            'coefficient': clf.intercept_.tolist() + clf.coef_[0].tolist()
-        })
-        self.sklearn_coefficients = df_index
         # Save to file
-        index_path = self.index_path / Path('sklearn_coefficients.csv')
-        df_index.to_csv(index_path, index=False)
+        index_path = self.index_path / Path('sklearn_coefficients.pkl')
+        joblib.dump(pipe, index_path)
         if self.debug:
+            dict_measures = {measure: pipe.named_steps['logisticregression'].coef_[:, i] for i, measure in enumerate(self.measures)}
+            dict_measures['intercept'] = pipe.named_steps['logisticregression'].intercept_.tolist()
+            dict_measures['target'] = df['target'].cat.categories.tolist()
+            df_index = pd.DataFrame().from_dict(dict_measures, orient='index').T
+            df_index.index = df_index['target']
+            df_index = df_index.drop(columns=['target'])
+            print(df_index)
             print('Saved sklearn coefficients to', index_path)
-        return df_index
     
     def create_index_statsmodels(self) -> Dict[str, float]:
         if self.data is None:
@@ -137,17 +205,17 @@ class AlternationIndex:
             df = self.data
         # Create target variable
         # 1 for alternation, 0 for segmentation/random
-        df['target'] = df['data_type'].apply(lambda x: 1 if x == 'alternation' else 0)
+        # df['target'] = df['data_type'].apply(lambda x: 1 if x == 'alternation' else 0)
+        df['target'] = df['data_type'].astype("category")
         # Fit logistic regression
         X = sm.add_constant(df[self.measures])
         y = df['target']
-        model = sm.Logit(y, X)
-        result = model.fit(disp=0)
+        model = sm.MNLogit(y, X)
+        result = model.fit(method='newton', disp=0)
+        # model = sm.Logit(y, X)
+        # result = model.fit(disp=0)
         print(result.summary())
-        df_index = pd.DataFrame({
-            'measure': ['intercept'] + self.measures,
-            'coefficient': result.params.tolist()
-        })
+        df_index = pd.DataFrame(result.params).T
         self.statsmodels_coefficients = df_index
         # Save to file
         index_path = self.index_path / Path('statsmodels_coefficients.csv')
@@ -157,7 +225,7 @@ class AlternationIndex:
         return df_index
 
     def simulate_data(self) -> pd.DataFrame:        
-        data_types = ['alternation', 'segmentation', 'random']
+        data_types = ['alternation', 'segmentation', 'mixed', 'random']
         df_list = list()
         for data_type in data_types:
             df = self.simulate_data_kind(data_type)
@@ -170,12 +238,14 @@ class AlternationIndex:
         return df
     
     def simulate_data_kind(self, data_type:str) -> pd.DataFrame:
-        assert(data_type in ['segmentation', 'alternation', 'random'])
+        assert(data_type in ['segmentation', 'alternation', 'mixed', 'random'])
         num_episodes = deepcopy(self.num_episodes)
-        if data_type in ['segmentation', 'random']:
-            num_episodes = self.num_episodes // 2
         df_list = list()
         for num_agents, threshold, epsilon in tqdm(self.configuration_points, desc=f'Running configurations for {data_type}'):
+            B = int(num_agents * threshold)
+            if data_type == 'mixed' and (num_agents == 2 or B == 1):
+                # Skip mixed simulation
+                continue
             eq_generator = CherryPickEquilibria(
                 num_agents=int(num_agents),
                 threshold=threshold,
@@ -202,17 +272,20 @@ class AlternationIndex:
         index = AlternationIndex()
         index_path = PATHS['index_path']
         if priority == 'sklearn':
-            index_path = index_path / Path('sklearn_coefficients.csv')
-            df = pd.read_csv(index_path)
-            index.sklearn_coefficients = df['coefficient'].values
+            index_path = index_path / Path('sklearn_coefficients.pkl')
+            index.model = joblib.load(index_path)
+        elif priority == 'mlp':
+            index_path = index_path / Path('mlp_coefficients.pt')
+            index.model = SimpleMLP(hidden_size=32)
+            index.model.model.load_state_dict(torch.load(index_path))
         elif priority == 'statsmodels':
-            index_path = index_path / Path('statsmodels_coefficients.csv')
-            df = pd.read_csv(index_path)
-            index.statsmodels_coefficients = df['coefficient'].values
+            raise NotImplementedError('Statsmodels coefficients are not implemented yet')
+            # index_path = index_path / Path('statsmodels_coefficients.csv')
+            # df = pd.read_csv(index_path)
+            # index.statsmodels_coefficients = df['coefficient'].values
         else:
             raise ValueError('Priority must be sklearn or statsmodels')
         index.priority = priority
-        index.create_index_calculator()
         return index
     
     @staticmethod

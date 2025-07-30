@@ -1,4 +1,4 @@
-measure,coefficient
-intercept,-20.88514143080721
-bounded_efficiency,68.47535010962821
-inequality,-170.73358907574413
+const,bounded_efficiency,entropy,conditional_entropy,inequality
+,,,,
+,,,,
+,,,,

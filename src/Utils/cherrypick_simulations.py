@@ -35,13 +35,17 @@ class CherryPickEquilibria:
         self.debug = True
 
     def generate_data(self, kind:str) -> pd.DataFrame:
-        assert(kind in ['segmentation', 'alternation', 'random'])
+        assert(kind in ['segmentation', 'alternation', 'mixed', 'random'])
         df_list = list()
         for i in tqdm(range(self.num_episodes), desc='Running episodes', leave=False):
             if kind == 'segmentation':
                 df = self.generate_segmentation_simulation()
             elif kind == 'alternation':
                 df = self.generate_alternation_simulation()
+            elif kind == 'mixed':
+                if self.num_agents == 2:
+                    raise Exception('Mixed simulation is not available for 2 agents')
+                df = self.generate_mixed_simulation()
             else:
                 df = self.generate_random_simulation()
             df['id_sim'] = f'{self.num_agents}-{self.threshold}-{self.epsilon}-{kind}-{i}'
@@ -59,13 +63,20 @@ class CherryPickEquilibria:
 
     def generate_alternation_simulation(self) -> pd.DataFrame:
         # Generate go array
-        # go_array = self.get_fair_periodic_equilibrium(self.num_rounds)
         go_array = self.random_fair_periodic_equilibrium(self.num_rounds)
         go_array = self.apply_epsilon(go_array).T
         # Generate dataframe
         df = self.generate_dataframe(go_array)
         return df
     
+    def generate_mixed_simulation(self) -> pd.DataFrame:
+        # Generate go array
+        go_array = self.random_mixed_periodic_equilibrium(self.num_rounds)
+        go_array = self.apply_epsilon(go_array).T
+        # Generate dataframe
+        df = self.generate_dataframe(go_array)
+        return df
+
     def generate_random_simulation(self) -> pd.DataFrame:
         # Generate go array
         # go_array = self.rng.integers(low=0, high=2, size=(self.num_agents, self.num_rounds))
@@ -94,11 +105,37 @@ class CherryPickEquilibria:
         df['threshold'] = self.threshold
         return df
 
+    def random_one_shot_equilibrium(self) -> np.ndarray:
+        go_agents = self.rng.choice(self.agents, size=self.B, replace=False)
+        if self.debug:
+            print(f'Equilibrium of {self.B} agents:\n{go_agents}')
+        return go_agents
+
+    def random_periodic_equilibrium(self, period:int) -> np.ndarray:
+        period = int(period)
+        assert(period <= self.num_agents)
+        one_shot_equilibria = list(permutations(self.agents, r=self.B))
+        periodic_equilibrium = self.rng.choice(one_shot_equilibria, size=period, replace=True)
+        if self.debug:
+            for k, agents in enumerate(periodic_equilibrium):
+                print(f'On round {k} agents that go are {agents}')
+        return periodic_equilibrium
+
     def random_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
         periodic_equilibrium = self.get_fair_periodic_equilibrium(period)
         periodic_equilibrium = periodic_equilibrium.T
         np.random.shuffle(periodic_equilibrium)
         return periodic_equilibrium.T
+
+    def random_mixed_periodic_equilibrium(self, period:int) -> np.ndarray:
+        num_seg = self.rng.integers(low=1, high=self.B)
+        mixed_equilibrium = self.get_mixed_periodic_equilibrium(
+            num_seg=num_seg,
+            period=period
+        )
+        mixed_equilibrium = mixed_equilibrium.T
+        np.random.shuffle(mixed_equilibrium)
+        return mixed_equilibrium.T
 
     def apply_epsilon(self, periodic_equilibrium:np.ndarray) -> np.ndarray:
         new_equilibrium = [
@@ -270,18 +307,3 @@ class CherryPickEquilibria:
             print(f'Highest fair quantity: {high_fair_quantity}')        
         return low_fair_quantity, high_fair_quantity
 
-    def random_one_shot_equilibrium(self) -> np.ndarray:
-        go_agents = self.rng.choice(self.agents, size=self.B, replace=False)
-        if self.debug:
-            print(f'Equilibrium of {self.B} agents:\n{go_agents}')
-        return go_agents
-
-    def random_periodic_equilibrium(self, period:int) -> np.ndarray:
-        period = int(period)
-        assert(period <= self.num_agents)
-        one_shot_equilibria = list(permutations(self.agents, r=self.B))
-        periodic_equilibrium = self.rng.choice(one_shot_equilibria, size=period, replace=True)
-        if self.debug:
-            for k, agents in enumerate(periodic_equilibrium):
-                print(f'On round {k} agents that go are {agents}')
-        return periodic_equilibrium
