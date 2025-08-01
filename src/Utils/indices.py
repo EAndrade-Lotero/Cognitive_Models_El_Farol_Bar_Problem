@@ -38,8 +38,8 @@ class AlternationIndex:
         self.seed = seed
         self.rng = np.random.default_rng(seed=seed)
         self.configuration_points = self.create_configurations()
-        self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
-        # self.measures = ['bounded_efficiency', 'inequality']
+        # self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
+        self.measures = ['bounded_efficiency', 'inequality']
         self.data = None
         self.sklearn_coefficients = None
         self.statsmodels_coefficients = None
@@ -139,9 +139,10 @@ class AlternationIndex:
         )
 
         clf = SimpleMLP(
-            categories=categories,
+            input_size=len(self.measures),
             hidden_size=32, 
-            epochs=150
+            categories=categories,
+            epochs=250
         )
         clf.fit(X_train, y_train)
         print("\nTest performance:")
@@ -286,8 +287,22 @@ class AlternationIndex:
         elif priority == 'mlp':
             index_path = index_path / Path('mlp_coefficients.pt')
             categories = CherryPickEquilibria.get_categories()
-            index.model = SimpleMLP(categories=categories, hidden_size=32)
-            index.model.model.load_state_dict(torch.load(index_path))
+            if torch.cuda.is_available():
+                index.model = SimpleMLP(
+                    input_size=len(index.measures),
+                    hidden_size=32,
+                    categories=categories, 
+                )
+                index.model.model.load_state_dict(torch.load(index_path))
+            else:
+                index.model = SimpleMLP(
+                    input_size=len(index.measures),
+                    hidden_size=32, 
+                    categories=categories, 
+                    device="cpu"
+                )
+                state_dict = torch.load(index_path, map_location="cpu")
+                index.model.model.load_state_dict(state_dict, strict=True)
         elif priority == 'statsmodels':
             raise NotImplementedError('Statsmodels coefficients are not implemented yet')
             # index_path = index_path / Path('statsmodels_coefficients.csv')

@@ -11,7 +11,7 @@ from sklearn.metrics import classification_report
 
 class SimpleMLP:
     """
-    A minimal MLP for 4‑feature → 4‑class classification.
+    A minimal MLP for classification.
 
     Methods
     -------
@@ -49,6 +49,8 @@ class SimpleMLP:
         # --- define the network ------------------------------------------
         self.model = nn.Sequential(
             nn.Linear(self.input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, self.num_classes)
         ).to(self.device)

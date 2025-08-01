@@ -142,7 +142,12 @@ class CherryPickEquilibria:
 
     def random_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
         periodic_equilibrium = self.get_fair_periodic_equilibrium(period)
-        np.random.shuffle(periodic_equilibrium)
+        if self.rng.random() < 0.5:
+            np.random.shuffle(periodic_equilibrium)
+        else:
+            periodic_equilibrium = periodic_equilibrium.T
+            np.random.shuffle(periodic_equilibrium)
+            periodic_equilibrium = periodic_equilibrium.T
         return periodic_equilibrium
 
     def random_mixed_periodic_equilibrium(self, period:int) -> np.ndarray:
