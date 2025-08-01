@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from copy import deepcopy
 from tqdm.auto import tqdm
 from itertools import permutations, combinations
 from typing import Optional, Union, Tuple, List
@@ -32,10 +33,11 @@ class CherryPickEquilibria:
         self.num_episodes = num_episodes
         self.seed = seed
         self.rng = np.random.default_rng(seed=seed)
+        self.categories = 'alternation', 'mixed', 'random', 'segmentation'
         self.debug = True
 
     def generate_data(self, kind:str) -> pd.DataFrame:
-        assert(kind in ['segmentation', 'alternation', 'mixed', 'random'])
+        assert(kind in self.categories)
         df_list = list()
         for i in tqdm(range(self.num_episodes), desc='Running episodes', leave=False):
             if kind == 'segmentation':
@@ -78,11 +80,28 @@ class CherryPickEquilibria:
         return df
 
     def generate_random_simulation(self) -> pd.DataFrame:
-        # Generate go array
-        # go_array = self.rng.integers(low=0, high=2, size=(self.num_agents, self.num_rounds))
-        go_array = (self.rng.random((self.num_agents, self.num_rounds)) < self.threshold).astype(int)
-        # Generate dataframe
-        df = self.generate_dataframe(go_array)
+        # Keep backup copy of epsilon and augment epsilon for lots of noise
+        bkup_epsilon = deepcopy(self.epsilon)
+        self.epsilon = 0.05 + self.rng.integers(low=0, high=10) / 18
+        # Choose kind to mimic with lots of noise
+        classes = ['alternation', 'segmentation', 'mixed', 'random']
+        idx = self.rng.integers(low=0, high=len(classes))
+        chosen_class = classes[idx]
+        if chosen_class == 'alternation':
+            df = self.generate_alternation_simulation()
+        elif chosen_class == 'segmentation':
+            df = self.generate_segmentation_simulation()
+        elif chosen_class == 'mixed':
+            try:
+                df = self.generate_mixed_simulation()
+            except:
+                go_array = (self.rng.random((self.num_agents, self.num_rounds)) < self.threshold).astype(int)
+                df = self.generate_dataframe(go_array)
+        else:
+            go_array = (self.rng.random((self.num_agents, self.num_rounds)) < self.threshold).astype(int)
+            df = self.generate_dataframe(go_array)
+        # Restore previous epsilon
+        self.epsilon = deepcopy(bkup_epsilon)
         return df
 
     def generate_dataframe(self, go_array:np.ndarray) -> pd.DataFrame:
@@ -123,19 +142,19 @@ class CherryPickEquilibria:
 
     def random_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
         periodic_equilibrium = self.get_fair_periodic_equilibrium(period)
-        periodic_equilibrium = periodic_equilibrium.T
         np.random.shuffle(periodic_equilibrium)
-        return periodic_equilibrium.T
+        return periodic_equilibrium
 
     def random_mixed_periodic_equilibrium(self, period:int) -> np.ndarray:
+        assert(self.num_agents > 2), "Number of agents should be greater than 2 to produce a mixed equilibrium"
+        assert(self.B > 1), "Bar's capacity should be higher than 1 to produce a mixed equilibrium"
         num_seg = self.rng.integers(low=1, high=self.B)
         mixed_equilibrium = self.get_mixed_periodic_equilibrium(
             num_seg=num_seg,
             period=period
         )
-        mixed_equilibrium = mixed_equilibrium.T
         np.random.shuffle(mixed_equilibrium)
-        return mixed_equilibrium.T
+        return mixed_equilibrium
 
     def apply_epsilon(self, periodic_equilibrium:np.ndarray) -> np.ndarray:
         new_equilibrium = [
@@ -307,3 +326,6 @@ class CherryPickEquilibria:
             print(f'Highest fair quantity: {high_fair_quantity}')        
         return low_fair_quantity, high_fair_quantity
 
+    @staticmethod
+    def get_categories():
+        return ['alternation', 'mixed', 'random', 'segmentation']

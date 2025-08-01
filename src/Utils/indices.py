@@ -52,14 +52,19 @@ class AlternationIndex:
     def __call__(self, df:pd.DataFrame) -> np.ndarray:
         '''Calculate the index from the dataframe'''
         # Get index of alternation
-        classes = self.model.named_steps["logisticregression"].classes_.tolist()
-        idx_alternation = classes.index('alternation')
+        probabilities = self.calculate_probabilities('alternation', df)
+        return probabilities
+    
+    def calculate_probabilities(self, category:str, df:pd.DataFrame) -> np.ndarray:
+        # Get index of category
+        classes = CherryPickEquilibria.get_categories()
+        idx_category = classes.index(category)
         # Obtain probabilities from model
         if self.model is None:
             self.create_index_calculator()
         df_ = df[self.measures]
         probabilities = self.model.predict_proba(df_)
-        return probabilities[:, idx_alternation]
+        return probabilities[:, idx_category]
     
     def classify(self, df:pd.DataFrame) -> np.ndarray:
 
@@ -74,7 +79,7 @@ class AlternationIndex:
 
         '''Classify the simulations from the dataframe'''
         # Get classes
-        classes = self.model.named_steps["logisticregression"].classes_.tolist()
+        classes = CherryPickEquilibria.get_categories()
         # Obtain probabilities from model
         if self.model is None:
             self.create_index_calculator()
@@ -122,7 +127,8 @@ class AlternationIndex:
         else:
             df = self.data
 
-        df['target'] = df['data_type'].astype("category")
+        categories = CherryPickEquilibria.get_categories()
+        df['target'] = df['data_type'].apply(lambda x: categories.index(x)).astype("category")
         # Split into train/test
         X_train, X_test, y_train, y_test = train_test_split(
             df[self.measures], 
@@ -132,16 +138,19 @@ class AlternationIndex:
             stratify=df['target']
         )
 
-        model = SimpleMLP()
-        clf = SimpleMLP(hidden_size=32, epochs=150)
+        clf = SimpleMLP(
+            categories=categories,
+            hidden_size=32, 
+            epochs=150
+        )
         clf.fit(X_train, y_train)
         print("\nTest performance:")
+        y_test = np.vectorize(lambda x: categories[x])(y_test)
         clf.evaluate(X_test, y_test)        
 
         # Save to file
         index_path = self.index_path / Path('mlp_coefficients.pt')
         torch.save(clf.model.state_dict(), index_path)
-
 
     def create_index_sklearn(self) -> None:
         if self.data is None:
@@ -276,7 +285,8 @@ class AlternationIndex:
             index.model = joblib.load(index_path)
         elif priority == 'mlp':
             index_path = index_path / Path('mlp_coefficients.pt')
-            index.model = SimpleMLP(hidden_size=32)
+            categories = CherryPickEquilibria.get_categories()
+            index.model = SimpleMLP(categories=categories, hidden_size=32)
             index.model.model.load_state_dict(torch.load(index_path))
         elif priority == 'statsmodels':
             raise NotImplementedError('Statsmodels coefficients are not implemented yet')

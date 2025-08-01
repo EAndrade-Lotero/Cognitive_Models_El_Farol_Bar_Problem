@@ -497,8 +497,12 @@ class GetMeasurements :
             return 'conditional_entropy'
     
     def keep_last_rounds(self) -> None:
-        num_rounds = max(self.data["round"].unique())
-        self.data = self.data[self.data["round"] >= (num_rounds - self.T)].reset_index(drop=True)
+        df_list = []
+        for key, grp in self.data.groupby(self.columns):            
+            num_rounds = max(grp["round"].unique())
+            df = grp[grp["round"] >= (num_rounds - self.T)].reset_index(drop=True)
+            df_list.append(df)
+        self.data = pd.concat(df_list, ignore_index=True)
 
     @staticmethod
     def attendance(df: pd.DataFrame) -> float:

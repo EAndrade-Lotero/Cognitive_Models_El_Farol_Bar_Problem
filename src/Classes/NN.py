@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from typing import List
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import classification_report
 
@@ -19,17 +21,20 @@ class SimpleMLP:
     predict(X)        -> np.ndarray
     """
     def __init__(
-        self,
-        hidden_size: int = 16,
-        lr: float = 1e-3,
-        epochs: int = 100,
-        batch_size: int = 32,
-        verbose: bool = True,
-        device: str | None = None,
-        seed: int | None = 42,
-    ):
-        self.input_size = 4
-        self.num_classes = 4
+                self,
+                categories: List[str],
+                input_size: int = 4,
+                hidden_size: int = 16,
+                lr: float = 1e-3,
+                epochs: int = 100,
+                batch_size: int = 32,
+                verbose: bool = True,
+                device: str | None = None,
+                seed: int | None = 42,
+            ) -> None:
+        self.input_size = input_size
+        self.categories = categories
+        self.num_classes = len(categories)
         self.hidden_size = hidden_size
         self.lr = lr
         self.epochs = epochs
@@ -51,9 +56,7 @@ class SimpleMLP:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         self.criterion = nn.CrossEntropyLoss()
 
-    # ---------------------------------------------------------------------#
-    #                          PUBLIC API                                   #
-    # ---------------------------------------------------------------------#
+
     def fit(self, X: np.ndarray, y: np.ndarray):
         """Train on the given data."""
         X = self._to_tensor(X, torch.float32)
@@ -103,14 +106,18 @@ class SimpleMLP:
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return hard class labels (ints 0‑3)."""
         probs = self.predict_proba(X)
-        return probs.argmax(axis=1)
+        indices = probs.argmax(axis=1)
+        labels = np.vectorize(lambda x: self.categories[x])(indices)
+        return labels
 
-    # ---------------------------------------------------------------------#
-    #                           UTILITIES                                   #
-    # ---------------------------------------------------------------------#
     def _to_tensor(self, array: np.ndarray, dtype) -> torch.Tensor:
         if not isinstance(array, np.ndarray):
             array = np.asarray(array)
-        return torch.tensor(array, dtype=dtype, device=self.device)
+        try:
+            return torch.tensor(array, dtype=dtype, device=self.device)
+        except Exception as e:
+            print('===>', type(array))
+            print(array)
+            raise e
 
 
