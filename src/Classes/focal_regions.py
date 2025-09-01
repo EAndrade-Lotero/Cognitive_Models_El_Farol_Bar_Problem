@@ -126,6 +126,7 @@ class FocalRegion:
     @staticmethod
     def draw_region(
                 region: np.ndarray, 
+                title: Optional[str] = None,
                 axes:Union[plt.Axes, None]=None,
                 file:Union[Path, None]=None
             ) -> plt.Axes:
@@ -185,6 +186,8 @@ class FocalRegion:
         for t in tangulos:
             axes.add_patch(t)
         axes.axis('off')
+        if title is not None:
+            axes.set_title(title)
         if file is not None:
             plt.savefig(file, dpi=300)
         return axes
@@ -227,7 +230,7 @@ class SetFocalRegions:
                 len_history: int,
                 c: Optional[float] = 0.9,
                 steepness: Optional[float] = 20,
-                max_regions: Optional[int] = 10,
+                max_regions: Optional[int] = 1,
                 from_file: Optional[bool] = True,
                 seed: Optional[Union[int, None]] = None
             ) -> None:
@@ -255,8 +258,8 @@ class SetFocalRegions:
         cherrypick.debug = False
         self.cherrypick = cherrypick
         self.from_file = from_file
-        file = f'{self.max_regions}_regions'
-        file += f'_{self.num_agents}_agents'
+        # file = f'{self.max_regions}_regions'
+        file = f'_{self.num_agents}_agents'
         file += f'_{self.threshold}_threshold.npy'
         self.file = PATHS['focal_regions_path'] / file
 
@@ -283,7 +286,9 @@ class SetFocalRegions:
         if self.debug:
             print('Equalizing region sizes')
         regions = self.equal_region_sizes([
-            fair_regions, segmented_regions, mixed_regions
+            fair_regions, 
+            # segmented_regions, 
+            # mixed_regions
         ])
         self.focal_regions = regions
         if self.from_file:

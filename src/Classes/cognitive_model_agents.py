@@ -7,7 +7,7 @@ from copy import deepcopy
 from itertools import product
 from prettytable import PrettyTable
 from random import randint, uniform
-from typing import Optional, Union, Dict, List, Tuple
+from typing import Optional, Union, Dict, List, Tuple, Any
 
 from Classes.agent_utils import ProxyDict, TransitionsFrequencyMatrix
 from Classes.focal_regions import SetFocalRegions
@@ -20,8 +20,8 @@ class CogMod() :
 
     def __init__(
                 self, 
-                free_parameters: Optional[Dict[str,any]]={}, 
-                fixed_parameters: Optional[Dict[str,any]]={}, 
+                free_parameters: Optional[Dict[str, Any]]={}, 
+                fixed_parameters: Optional[Dict[str, Any]]={}, 
                 n: Optional[int]=1,
                 fix_overflow: Optional[bool]=True
             ) -> None:
@@ -210,8 +210,8 @@ class CogMod() :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         '''
         Ingests parameters from the model.
@@ -252,7 +252,7 @@ class CogMod() :
         return 'CogMod'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         return {
             'inverse_temperature': (1, 64),
         }
@@ -264,8 +264,8 @@ class Random(CogMod) :
     '''
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -283,8 +283,8 @@ class Random(CogMod) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.go_prob = free_parameters["go_prob"]
@@ -335,11 +335,20 @@ class Random(CogMod) :
         return 'Random'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
-        bounds = super().bounds(fixed_parameters)
-        return bounds.update({
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = CogMod.bounds(fixed_parameters)
+        bounds.update({
             'go_prob': (0, 1)
         })
+        return bounds
+    
+    @staticmethod
+    def create_random_params(num_agents:int) -> Dict[str, float]:
+        free_parameters = {
+            "inverse_temperature": np.random.uniform(4, 32),
+            'go_prob': np.random.uniform(0, 1)
+        }
+        return free_parameters
 
 
 class PriorsM1(CogMod) :
@@ -348,8 +357,8 @@ class PriorsM1(CogMod) :
     '''
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #--------------------------------------------
@@ -373,8 +382,8 @@ class PriorsM1(CogMod) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.go_prob = np.zeros(self.shape)
@@ -396,7 +405,7 @@ class PriorsM1(CogMod) :
                 print(f'Here are also the fixed parameters:\n{fixed_parameters}')
                 raise Exception(e)			
 
-    def get_my_free_parameters(self, free_parameters:Dict[str,any]) -> Dict[str,any]:
+    def get_my_free_parameters(self, free_parameters:Dict[str, Any]) -> Dict[str, Any]:
         parameters = dict()
         for parameter, value in free_parameters.items():
             if '-' in parameter:
@@ -440,7 +449,7 @@ class PriorsM1(CogMod) :
         return 'Priors-M1'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = CogMod.bounds(fixed_parameters)
         num_agents = fixed_parameters["num_agents"]
         for agent_n in range(num_agents):
@@ -464,8 +473,8 @@ class PriorsM2(PriorsM1) :
     '''
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -506,7 +515,7 @@ class PriorsM2(PriorsM1) :
         return 'Priors-M2'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         num_agents = fixed_parameters["num_agents"]
         bounds = CogMod.bounds(fixed_parameters)
         states = list(product([0, 1], np.arange(num_agents + 1)))
@@ -531,8 +540,8 @@ class PriorsM3(PriorsM1) :
     '''
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -575,7 +584,7 @@ class PriorsM3(PriorsM1) :
         return 'Priors-M3'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         num_agents = fixed_parameters["num_agents"]
         states = np.arange(2 ** num_agents)
         bounds = CogMod.bounds(fixed_parameters)
@@ -602,8 +611,8 @@ class WSLSM1(CogMod) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -628,8 +637,8 @@ class WSLSM1(CogMod) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)		
         self.wsls_strength = free_parameters["wsls_strength"]
@@ -716,7 +725,7 @@ class WSLSM1(CogMod) :
         return 'WSLS-M1'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = CogMod.bounds(fixed_parameters)
         bounds.update({
             'wsls_strength': (0, 10),
@@ -732,8 +741,8 @@ class WSLSM2(WSLSM1):
     '''
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -785,8 +794,8 @@ class WSLSM3(WSLSM1):
     '''
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -837,8 +846,8 @@ class PayoffM1(CogMod) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -861,8 +870,8 @@ class PayoffM1(CogMod) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.learning_rate = free_parameters["learning_rate"]
@@ -939,7 +948,7 @@ class PayoffM1(CogMod) :
         return 'Payoff-M1'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = CogMod.bounds(fixed_parameters)
         bounds.update({
             'learning_rate': (0, 1),
@@ -955,8 +964,8 @@ class PayoffM2(PayoffM1) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1041,8 +1050,8 @@ class PayoffM3(PayoffM1) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1132,8 +1141,8 @@ class AttendanceM1(PayoffM1) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1151,8 +1160,8 @@ class AttendanceM1(PayoffM1) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
@@ -1175,7 +1184,7 @@ class AttendanceM1(PayoffM1) :
         return 'Attendance-M1'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM1.bounds(fixed_parameters)
         bounds.update({
             'bias': (0, 1)
@@ -1193,8 +1202,8 @@ class AttendanceM2(PayoffM2) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1208,8 +1217,8 @@ class AttendanceM2(PayoffM2) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
@@ -1232,7 +1241,7 @@ class AttendanceM2(PayoffM2) :
         return 'Attendance-M2'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM2.bounds(fixed_parameters)
         bounds.update({
             'bias': (0, 1)
@@ -1249,8 +1258,8 @@ class AttendanceM3(PayoffM3) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1264,8 +1273,8 @@ class AttendanceM3(PayoffM3) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
@@ -1288,7 +1297,7 @@ class AttendanceM3(PayoffM3) :
         return 'Attendance-M3'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM3.bounds(fixed_parameters)
         bounds.update({
             'bias': (0, 1)
@@ -1305,8 +1314,8 @@ class AvailableSpaceM1(AttendanceM1) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1347,8 +1356,8 @@ class AvailableSpaceM2(AttendanceM2) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1388,8 +1397,8 @@ class AvailableSpaceM3(AttendanceM3) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1430,8 +1439,8 @@ class FairnessM1(AttendanceM1) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1473,8 +1482,8 @@ class FairnessM2(AttendanceM2) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1505,7 +1514,7 @@ class FairnessM2(AttendanceM2) :
         return 'Fairness-M2'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM2.bounds(fixed_parameters)
         bounds.update({
             'bias': (0, 0.01)
@@ -1523,8 +1532,8 @@ class FairnessM3(AttendanceM3) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1564,8 +1573,8 @@ class MFPM1(CogMod) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1588,8 +1597,8 @@ class MFPM1(CogMod) :
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.belief_strength = free_parameters['belief_strength']
@@ -1731,7 +1740,7 @@ class MFPM1(CogMod) :
         return 'MFP-M1'
 
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = CogMod.bounds(fixed_parameters)
         bounds.update({
             'belief_strength': (1, 100)
@@ -1748,8 +1757,8 @@ class MFPM2(MFPM1) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1785,8 +1794,8 @@ class MFPM3(MFPM1) :
 
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1819,8 +1828,8 @@ class FocalRegionAgent(CogMod):
     '''
     def __init__(
                 self,
-                free_parameters: Optional[Dict[str, any]] = {},
-                fixed_parameters: Optional[Dict[str, any]] = {},
+                free_parameters: Optional[Dict[str, Any]] = {},
+                fixed_parameters: Optional[Dict[str, Any]] = {},
                 n: Optional[int] = 1
             ) -> None:
         #----------------------
@@ -1834,8 +1843,8 @@ class FocalRegionAgent(CogMod):
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         # Create set of focal regions
@@ -1873,11 +1882,10 @@ class FocalRegionAgent(CogMod):
         return 'FRA'
     
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
-        num_agents = fixed_parameters['num_agents']
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         return {
             'inverse_temperature': (1, 64),
-            'len_history': (1, num_agents + 1),
+            'len_history': (1, 4),
             'c': (0.5, 1)
             # 'max_regions': (1, 10),
         }
@@ -1886,8 +1894,8 @@ class FocalRegionAgent(CogMod):
 class FRAplus(AttendanceM2):
     def __init__(
                 self, 
-                free_parameters:Optional[Dict[str,any]]={}, 
-                fixed_parameters:Optional[Dict[str,any]]={}, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
                 n:Optional[int]=1
             ) -> None:
         #----------------------
@@ -1901,8 +1909,8 @@ class FRAplus(AttendanceM2):
 
     def ingest_parameters(
                 self, 
-                fixed_parameters:Dict[str,any], 
-                free_parameters:Dict[str,any]
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         # Create set of focal regions
@@ -1944,13 +1952,12 @@ class FRAplus(AttendanceM2):
         return 'FRA+Payoff+Attendance'
     
     @staticmethod
-    def bounds(fixed_parameters: Dict[str, any]) -> Dict[str, Tuple[int, int]]:
-        num_agents = fixed_parameters['num_agents']
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         return {
             'inverse_temperature': (1, 64),
             'bias': (0, 1),
             'learning_rate': (0, 1),
-            'len_history': (1, num_agents + 1),
+            'len_history': (1, 4),
             'c': (0.5, 1),
             # 'max_regions': (1, 10),
             'delta': (0, 0.2),
@@ -1960,7 +1967,8 @@ class FRAplus(AttendanceM2):
 
 
 MODELS = [
-    PriorsM1, PriorsM2, PriorsM3,
+    # PriorsM1, PriorsM2, PriorsM3,
+    Random,
     WSLSM1, WSLSM2, WSLSM3,
     PayoffM1, PayoffM2, PayoffM3,
     AttendanceM1, AttendanceM2, AttendanceM3,
@@ -1978,110 +1986,3 @@ MFPS = [MFPM1, MFPM2, MFPM3]
 
 PRIOR_MODELS = [PriorsM1, PriorsM2, PriorsM3]
 
-# free_parameters_error_driven_1 = {
-# 	'inverse_temperature':10,
-# 	'learning_rate': 0.001,
-# }
-# free_parameters_error_driven_2 = {
-# 	'inverse_temperature':10,
-# 	'learning_rate': 0.001,
-# 	'bias': 0.5
-# }
-# free_parameters_MFP = {
-# 	'inverse_temperature':10,
-# 	'belief_strength': 10
-# }
-
-# MODELS = {
-# 	'Random': {
-# 		'class': Random,
-# 		'free_parameters': {
-# 			'go_prob':0,
-# 		}
-# 	# 'Random-M1': {
-# 	# 	'class': RandomM1,
-# 	# 	'free_parameters': {
-# 	# 		'go_prob_1':0,
-# 	# 	}
-# 	# }, 
-# 	# 'Random-M2': {
-# 	# 	'class': RandomM2,
-# 	# 	'free_parameters': {
-# 	# 		'go_prob_2':0,
-# 	# 	}
-# 	# }, 
-# 	# 'Random-M3': {
-# 	# 	'class': RandomM3,
-# 	# 	'free_parameters': {
-# 	# 		'go_prob_3':0,
-# 	# 	}
-# 	}, 
-# 	'WSLS': {
-# 		'class': WSLSM1, 
-# 		'free_parameters': {
-# 			'inverse_temperature':10,
-# 			'go_drive':0,
-# 			'wsls_strength':0
-# 		}
-# 	}, 
-# 	'Payoff-M1': {
-# 		'class': PayoffM1,
-# 		'free_parameters': free_parameters_error_driven_1
-# 	},
-# 	'Payoff-M2': {
-# 		'class': PayoffM2,
-# 		'free_parameters': free_parameters_error_driven_1
-# 	},
-# 	'Payoff-M3': {
-# 		'class': PayoffM3,
-# 		'free_parameters': free_parameters_error_driven_1
-# 	},
-# 	'AvailableSpace-M1': {
-# 		'class': AvailableSpaceM1,
-# 		'free_parameters': free_parameters_error_driven_1
-# 	},
-# 	'AvailableSpace-M2': {
-# 		'class': AvailableSpaceM2,
-# 		'free_parameters': free_parameters_error_driven_1
-# 	},
-# 	'AvailableSpace-M3': {
-# 		'class': AvailableSpaceM3,
-# 		'free_parameters': free_parameters_error_driven_1
-# 	},
-# 	'Attendance-M1': {
-# 		'class': AttendanceM1,
-# 		'free_parameters': free_parameters_error_driven_2
-# 	},
-# 	'Attendance-M2': {
-# 		'class': AttendanceM2,
-# 		'free_parameters': free_parameters_error_driven_2
-# 	},
-# 	'Attendance-M3': {
-# 		'class': AttendanceM3,
-# 		'free_parameters': free_parameters_error_driven_2
-# 	},
-# 	'Fairness-M1': {
-# 		'class': FairnessM1,
-# 		'free_parameters': free_parameters_error_driven_2
-# 	},
-# 	'Fairness-M2': {
-# 		'class': FairnessM2,
-# 		'free_parameters': free_parameters_error_driven_2
-# 	},
-# 	'Fairness-M3': {
-# 		'class': FairnessM3,
-# 		'free_parameters': free_parameters_error_driven_2
-# 	},
-# 	'MFP-M1': {
-# 		'class': MFPM1,
-# 		'free_parameters': free_parameters_MFP
-# 	},
-# 	'MFP-M2': {
-# 		'class': MFPM2,
-# 		'free_parameters': free_parameters_MFP
-# 	},
-# 	'MFP-M3': {
-# 		'class': MFPM3,
-# 		'free_parameters': free_parameters_MFP
-# 	}
-# }

@@ -666,6 +666,7 @@ class Performer :
                 n=n
             ) for n in range(num_agents)
         ]
+        print(agents[0].sfr)
         #-------------------------------
         # Create bar
         #-------------------------------

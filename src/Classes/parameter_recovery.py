@@ -10,7 +10,7 @@ from pathlib import Path
 from tqdm.auto import tqdm
 from types import MethodType
 from typing import (
-	List, Dict, Tuple,
+	List, Dict, Tuple, Any,
 	Union, Optional, Callable
 )
 from bayes_opt import BayesianOptimization
@@ -52,8 +52,8 @@ class GetEpisodeLikelihood :
     def __init__(
                 self, 
                 model: Agent, 
-                fixed_parameters: Dict[str, any],
-                free_parameters: Dict[str, any],
+                fixed_parameters: Dict[str, Any],
+                free_parameters: Dict[str, Any],
                 data: pd.DataFrame,
                 agents: Optional[Union[Dict[int, Agent], None]]=None
             ) -> None:
@@ -272,7 +272,7 @@ class GetDeviance:
     def __init__(
                 self, 
                 model: Agent, 
-                free_parameters: Dict[str, any],
+                free_parameters: Dict[str, Any],
                 data: pd.DataFrame,
                 with_treatment: Optional[bool]=False
             ) -> None:
@@ -295,7 +295,7 @@ class GetDeviance:
 
     def get_deviance_from_group(
                 self, 
-                free_parameters: Dict[str, any],
+                free_parameters: Dict[str, Any],
                 save: Optional[bool]=False
             ) -> None:
         # Get episodes id
@@ -356,7 +356,7 @@ class GetDeviance:
 
     def get_deviance_from_data(
                 self, 
-                free_parameters: Dict[str, any],
+                free_parameters: Dict[str, Any],
                 save: Optional[bool]=False
             ) -> None:
         '''Get the parameters' likelihood given the data.'''
@@ -394,8 +394,8 @@ class GetDeviance:
 
     def get_deviance_given_parameters(
                 self, 
-                free_parameters: Dict[str, any],
-                fixed_parameters: Dict[str, any],
+                free_parameters: Dict[str, Any],
+                fixed_parameters: Dict[str, Any],
                 data: pd.DataFrame,
                 save: Optional[bool]=False
             ) -> float:
@@ -488,6 +488,71 @@ class ParameterFit :
         Returns the parameters that minimize dev(parameters)
         '''
         results = dict()
+
+        try:
+            fixed_parameters = dict()
+            free_parameters, pbounds = self.get_pbounds(fixed_paramters=fixed_parameters)
+        except Exception as e:
+            print(f'Error getting bounds from {self.agent_class}:\n{e}')
+            raise e
+        
+        # Create optimizer
+        if self.optimizer_type == 'bayesian':
+            if self.debug:
+                print('Creating Bayesian optimizer...')
+            optimizer = self.create_bayesian_optimizer(
+                data=self.data,
+                free_parameters=free_parameters, 
+                pbounds=pbounds
+            )
+            # Find optimal parameters
+            if self.debug:
+                print('Finding optimal parameters...')
+            optimizer.maximize(**hyperparameters)
+        elif self.optimizer_type == 'scipy':
+            # Find optimal parameters
+            result = self.create_scipy_optimizer(
+                data=self.data,
+                free_parameters=free_parameters, 
+                pbounds=pbounds
+            )
+        else:
+            raise NotImplementedError(f'Optimizer {self.optimizer_type} not implemented!')
+
+        # Save results
+        dict_results = dict()
+        dict_results['model'] = self.agent_class.__name__
+        dict_results['fixed_parameters'] = fixed_parameters
+
+        if self.optimizer_type == 'bayesian':
+            dict_results['free_parameters'] = optimizer.max['params']
+            dict_results['deviance'] = optimizer.max['target']
+        elif self.optimizer_type == 'scipy':
+            dict_results['free_parameters'] = {parameter:result.x[i] for i, parameter in enumerate(free_parameters.keys())}
+            dict_results['deviance'] = -result.fun
+        k = len(dict_results['free_parameters'])
+        dev = dict_results['deviance']
+        dict_results['AIC'] = 2*k - 2*dev
+
+        if self.debug:
+            print(f'Optimal parameters:\n{dict_results["free_parameters"]}')
+            print(f'Deviance: {dict_results["deviance"]}')
+            print(f'AIC: {dict_results["AIC"]}')
+            print('-'*50)
+
+        name = self.agent_class.name()
+        results[name] = dict_results
+
+        return results
+
+    def get_optimal_parameters_DEPRECATED(
+                self,
+                hyperparameters:Dict[str, int],
+            ) -> Tuple[float]:
+        '''
+        Returns the parameters that minimize dev(parameters)
+        '''
+        results = dict()
         list_fixed_parameters = PPT.get_fixed_parameters(self.data)
         # Iterate over fixed parameters
         for fixed_parameters in list_fixed_parameters:
@@ -564,7 +629,7 @@ class ParameterFit :
     def create_bayesian_optimizer(
                 self, 
                 data: pd.DataFrame,
-                free_parameters: Dict[str, any],
+                free_parameters: Dict[str, Any],
                 pbounds: Dict[str, Tuple[float]],
             ) -> BayesianOptimization:
         '''
@@ -593,7 +658,7 @@ class ParameterFit :
     def create_scipy_optimizer(
                 self, 
                 data: pd.DataFrame,
-                free_parameters: Dict[str, any],
+                free_parameters: Dict[str, Any],
                 pbounds: Dict[str, Tuple[float]],
             ) -> Callable:
         '''
@@ -628,14 +693,14 @@ class ParameterFit :
         )
         return optimizer
 
-    def random_init(self, pbounds: Dict[str, any]) -> np.array:
+    def random_init(self, pbounds: Dict[str, Any]) -> np.array:
         '''Returns a random initial point for the optimizer'''
         return np.array([
             np.random.uniform(lims[0], lims[1]) 
                 for parameter, lims in pbounds.items()
         ])
 
-    def get_pbounds(self, fixed_paramters: Dict[str, any]) -> Dict[str, Tuple[float]]:
+    def get_pbounds(self, fixed_paramters: Dict[str, Any]) -> Dict[str, Tuple[float]]:
         '''Returns the bounds of the parameters'''
         pbounds = self.agent_class.bounds(fixed_paramters)
         assert (pbounds is not None), f'No bounds for {self.agent_class.name()}'
@@ -680,7 +745,7 @@ class ParameterFit :
                 res = pf.get_optimal_parameters(hyperparameters)
                 best_fit.update(res)
 
-                print(best_fit)
+                # print(best_fit)
 
                 # Write one JSON object per line
                 f.write(json.dumps(best_fit) + '\n')        
