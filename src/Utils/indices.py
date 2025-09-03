@@ -8,7 +8,7 @@ from pathlib import Path
 from copy import deepcopy
 from tqdm.auto import tqdm
 from itertools import product
-from typing import Optional, Union, Dict, List
+from typing import Optional, Union, Dict, List, Tuple
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report
@@ -16,8 +16,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
 from Config.config import PATHS
-from Classes.NN import SimpleMLP
-from Utils.utils import GetMeasurements
+from Utils.utils import GetMeasurements, PPT
+from Utils.bar_utils import BarRenderer
+from Classes.NN import SimpleMLP, SimpleCNN
 from Utils.cherrypick_simulations import CherryPickEquilibria
 
 class AlternationIndex:
@@ -26,12 +27,14 @@ class AlternationIndex:
     def __init__(
                 self, 
                 num_points: Optional[int]=20,
+                num_rounds: Optional[int]=100,
                 num_episodes: Optional[int]=20,
                 max_agents: Optional[int]=8, 
                 max_epsilon: Optional[float]=0.025,
                 seed: Optional[Union[int, None]]=None
             ) -> None:
         self.num_points = num_points
+        self.num_rounds = num_rounds
         self.max_agents = max_agents
         self.max_epsilon = max_epsilon
         self.num_episodes = num_episodes
@@ -41,6 +44,7 @@ class AlternationIndex:
         # self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
         self.measures = ['bounded_efficiency', 'inequality']
         self.data = None
+        self.full_data = None
         self.sklearn_coefficients = None
         self.statsmodels_coefficients = None
         self.model = None
@@ -62,7 +66,10 @@ class AlternationIndex:
         # Obtain probabilities from model
         if self.model is None:
             self.create_index_calculator()
-        df_ = df[self.measures]
+        if self.priority == 'cnn':
+            df_, _ = self.get_x_y_values(df)
+        else:
+            df_ = df[self.measures]
         probabilities = self.model.predict_proba(df_)
         return probabilities[:, idx_category]
     
@@ -83,7 +90,10 @@ class AlternationIndex:
         # Obtain probabilities from model
         if self.model is None:
             self.create_index_calculator()
-        df_ = df[self.measures]
+        if self.priority == 'cnn':
+            df_, _ = self.get_x_y_values(df)
+        else:
+            df_ = df[self.measures]
         probabilities = self.model.predict_proba(df_)
         predictions = [get_class(line) for line in probabilities]
         # predictions = [classes[np.argmax(line)] for line in probabilities]
@@ -114,18 +124,77 @@ class AlternationIndex:
             self.create_index_sklearn()
         elif self.priority == 'mlp':
             self.create_index_mlp()
+        elif self.priority == 'cnn':
+            self.create_index_cnn()
         elif self.priority == 'statsmodels':
             raise NotImplementedError('Statsmodels coefficients are not implemented yet')
         else:
             raise ValueError('Priority must be sklearn or statsmodels')        
         
-    def create_index_mlp(self) -> None:
-        if self.data is None:
-            # Create dataframe with all data
-            df = self.simulate_data()
-            self.data = df
+    def create_index_cnn(self) -> None:
+
+        assert(self.full_data is not None)
+        df = self.full_data
+
+        categories = CherryPickEquilibria.get_categories()
+        df['target'] = df['data_type'].apply(lambda x: categories.index(x)).astype("category")
+
+        print('Preparing training data...')
+        X_values, y_values = self.get_x_y_values(df)
+
+        # Split into train/test
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_values, 
+            y_values, 
+            test_size=0.2,
+            random_state=0, 
+            stratify=y_values
+        )
+
+        clf = SimpleCNN(
+            categories=categories,
+            epochs=150
+        )
+        clf.fit(X_train, y_train)
+        print("\nTest performance:")
+        y_test = np.vectorize(lambda x: categories[x])(y_test)
+        clf.evaluate(X_test, y_test)        
+
+        # Save to file
+        index_path = self.index_path / Path('cnn_coefficients.pt')
+        torch.save(clf.model.state_dict(), index_path)
+
+    def get_x_y_values(self, df:pd.DataFrame) -> Tuple[List]:
+
+        def get_history_from_group(grp):
+            bar_renderer = BarRenderer(data=grp)
+            history = np.array(bar_renderer.get_history()).T[:, :25]
+            padding = np.zeros((12 - history.shape[0], history.shape[1]))
+            history = torch.tensor(np.vstack((history, padding)), dtype=torch.float32).unsqueeze(0)#.unsqueeze(0)  # Shape: (1, 1, 30, 12)
+            return history
+
+        X_values, y_values = [], []
+        if 'model' in df.columns:
+            group_column = 'model'
         else:
-            df = self.data
+            group_column = PPT.get_group_column(df.columns)
+        num_agents_column = PPT.get_num_player_column(df.columns)
+
+        for id_sim, grp in df.groupby(group_column):
+
+            num_agents = grp[num_agents_column].values[0]
+            num_rounds = grp['round'].nunique() + 1
+            history = get_history_from_group(grp)
+            X_values.append(history)
+
+            if 'target' in grp.columns:
+                y_values.append(grp['target'].values[0])
+
+        return X_values, y_values
+
+    def create_index_mlp(self) -> None:
+        assert(self.data is not None)
+        df = self.data
 
         categories = CherryPickEquilibria.get_categories()
         df['target'] = df['data_type'].apply(lambda x: categories.index(x)).astype("category")
@@ -154,12 +223,8 @@ class AlternationIndex:
         torch.save(clf.model.state_dict(), index_path)
 
     def create_index_sklearn(self) -> None:
-        if self.data is None:
-            # Create dataframe with all data
-            df = self.simulate_data()
-            self.data = df
-        else:
-            df = self.data
+        assert(self.data is not None)
+        df = self.data
         # Create target variable
         # 1 for alternation, 0 for segmentation/random
         # df['target'] = df['data_type'].apply(lambda x: 1 if x == 'alternation' else 0)
@@ -207,12 +272,8 @@ class AlternationIndex:
             print('Saved sklearn coefficients to', index_path)
     
     def create_index_statsmodels(self) -> Dict[str, float]:
-        if self.data is None:
-            # Create dataframe with all data
-            df = self.simulate_data()
-            self.data = df
-        else:
-            df = self.data
+        assert(self.data is not None)
+        df = self.data
         # Create target variable
         # 1 for alternation, 0 for segmentation/random
         # df['target'] = df['data_type'].apply(lambda x: 1 if x == 'alternation' else 0)
@@ -236,20 +297,28 @@ class AlternationIndex:
 
     def simulate_data(self) -> pd.DataFrame:        
         data_types = ['alternation', 'segmentation', 'mixed', 'random']
+        df_full_list = list()
         df_list = list()
         for data_type in data_types:
-            df = self.simulate_data_kind(data_type)
+            df, df_full = self.simulate_data_kind(data_type)
             df['data_type'] = data_type
             df_list.append(df)
+            df_full['data_type'] = data_type
+            df_full_list.append(df_full)
         df = pd.concat(df_list, ignore_index=True)
         df['num_agents'] = df['num_agents'].astype(int)
         df['threshold'] = df['threshold'].astype(float)
         self.data = df
+        df_full = pd.concat(df_full_list, ignore_index=True)
+        df_full['num_agents'] = df_full['num_agents'].astype(int)
+        df_full['threshold'] = df_full['threshold'].astype(float)
+        self.full_data = df_full
         return df
-    
-    def simulate_data_kind(self, data_type:str) -> pd.DataFrame:
+       
+    def simulate_data_kind(self, data_type:str) -> Tuple[pd.DataFrame]:
         assert(data_type in ['segmentation', 'alternation', 'mixed', 'random'])
         num_episodes = deepcopy(self.num_episodes)
+        df_full_list = list()
         df_list = list()
         for num_agents, threshold, epsilon in tqdm(self.configuration_points, desc=f'Running configurations for {data_type}'):
             B = int(num_agents * threshold)
@@ -259,12 +328,14 @@ class AlternationIndex:
             eq_generator = CherryPickEquilibria(
                 num_agents=int(num_agents),
                 threshold=threshold,
+                num_rounds=self.num_rounds,
                 epsilon=epsilon,
                 num_episodes=num_episodes,
                 seed=self.seed
             )
             eq_generator.debug = False
             df_alternation = eq_generator.generate_data(data_type)
+            df_full_list.append(df_alternation)
             get_m = GetMeasurements(
                 data=df_alternation, 
                 measures=self.measures,
@@ -274,8 +345,9 @@ class AlternationIndex:
             df['epsilon'] = epsilon
             df_list.append(df)
         df = pd.concat(df_list, ignore_index=True)
-        return df
-
+        df_full = pd.concat(df_full_list, ignore_index=True)
+        return df, df_full
+    
     @staticmethod
     def from_file(priority:Optional[str]='sklearn'):
         '''Load the index from file'''
@@ -298,6 +370,21 @@ class AlternationIndex:
                 index.model = SimpleMLP(
                     input_size=len(index.measures),
                     hidden_size=32, 
+                    categories=categories, 
+                    device="cpu"
+                )
+                state_dict = torch.load(index_path, map_location="cpu")
+                index.model.model.load_state_dict(state_dict, strict=True)
+        elif priority == 'cnn':
+            index_path = index_path / Path('cnn_coefficients.pt')
+            categories = CherryPickEquilibria.get_categories()
+            if torch.cuda.is_available():
+                index.model = SimpleCNN(
+                    categories=categories, 
+                )
+                index.model.model.load_state_dict(torch.load(index_path))
+            else:
+                index.model = SimpleCNN(
                     categories=categories, 
                     device="cpu"
                 )

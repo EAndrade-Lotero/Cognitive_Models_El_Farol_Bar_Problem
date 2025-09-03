@@ -46,7 +46,7 @@ class SimpleMLP:
             torch.manual_seed(seed)
             np.random.seed(seed)
 
-        # --- define the network ------------------------------------------
+        # --- define the network ----------------------------
         self.model = nn.Sequential(
             nn.Linear(self.input_size, hidden_size),
             nn.ReLU(),
@@ -121,5 +121,60 @@ class SimpleMLP:
             print('===>', type(array))
             print(array)
             raise e
+
+
+
+class SimpleCNN(SimpleMLP):
+    def __init__(
+                self, 
+                categories: List[str],
+                lr: float = 1e-3,
+                epochs: int = 100,
+                batch_size: int = 32,
+                verbose: bool = True,
+                device: str | None = None,
+                seed: int | None = 42,
+            ) -> None:
+        super(SimpleCNN, self).__init__(
+            categories=categories, 
+            lr=lr, 
+            epochs=epochs, 
+            batch_size=batch_size, 
+            verbose=verbose, 
+            device=device, 
+            seed=seed
+        )
+
+        self.num_classes = len(categories)
+        
+        # --- define the network ----------------------------
+        self.model = nn.Sequential(
+            # Convolutional feature extractor
+            # Input: (batch, 1, 25, 12)
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # -> (16, 15, 6)
+
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # -> (32, 7, 3)
+
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2,1), stride=(2,1)),  # -> (64, 3, 3)
+    
+            # Classifier
+            nn.Flatten(),                          # -> (batch, 64*3*3 = 576)
+            nn.Linear(384, 128),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(128, self.num_classes)            # -> (batch, 4)
+        )
+
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        self.criterion = nn.CrossEntropyLoss()
 
 
