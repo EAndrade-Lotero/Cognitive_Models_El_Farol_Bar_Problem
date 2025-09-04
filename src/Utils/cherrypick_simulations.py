@@ -18,7 +18,8 @@ class CherryPickEquilibria:
                 epsilon: float,
                 num_rounds: Optional[int]=100,
                 num_episodes: Optional[int]=100,
-                seed: Optional[Union[int, None]]=None
+                seed: Optional[Union[int, None]]=None,
+                fancy_2P: Optional[bool]=False,
             ) -> None:
         self.num_agents = num_agents
         self.agents = list(range(self.num_agents))
@@ -32,6 +33,7 @@ class CherryPickEquilibria:
         self.num_rounds = num_rounds
         self.num_episodes = num_episodes
         self.seed = seed
+        self.fancy_2P = fancy_2P
         self.rng = np.random.default_rng(seed=seed)
         self.categories = 'alternation', 'mixed', 'random', 'segmentation'
         self.debug = True
@@ -142,9 +144,11 @@ class CherryPickEquilibria:
 
     def random_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
         periodic_equilibrium = self.get_fair_periodic_equilibrium(period)
-        if self.rng.random() < 0.5:
+        if self.rng.random() < 0.8:
+            # Shuffle rows
             np.random.shuffle(periodic_equilibrium)
         else:
+            # Shuffle columns
             periodic_equilibrium = periodic_equilibrium.T
             np.random.shuffle(periodic_equilibrium)
             periodic_equilibrium = periodic_equilibrium.T
@@ -251,6 +255,9 @@ class CherryPickEquilibria:
             index = i % self.num_agents
             round_go_agents = np.concatenate([go_agents[index:], go_agents[:index]])
             go_array[:,i] = round_go_agents    
+        if self.fancy_2P and self.num_agents == 2:
+            if self.rng.random() < 0.2:
+                go_array = self.swap_random_consecutive_columns(go_array)
         if self.debug:
             print(f'Periodic equilibrium:\n{go_array}')            
         return go_array
@@ -334,3 +341,40 @@ class CherryPickEquilibria:
     @staticmethod
     def get_categories():
         return ['alternation', 'mixed', 'random', 'segmentation']
+    
+    def swap_random_consecutive_columns(self, arr: np.ndarray) -> np.ndarray:
+        """
+        Randomly swaps pairs of consecutive columns in a numpy array.
+        It swaps columns in about one-third of the total number of columns,
+        ensuring no repetitions.
+
+        Parameters
+        ----------
+        arr : np.ndarray
+            Input array with shape (n_rows, n_cols).
+        rng : np.random.Generator
+            A NumPy random number generator instance.
+
+        Returns
+        -------
+        np.ndarray
+            A copy of the array with randomly swapped columns.
+        """
+        n_rows, n_cols = arr.shape
+        if n_cols < 2:
+            return arr.copy()  # Nothing to swap if fewer than 2 columns
+
+        # Number of swaps = one third of columns (rounded down)
+        num_swaps = n_cols // 4
+
+        # Candidate starting positions for consecutive pairs
+        candidates = np.arange(n_cols - 1)
+
+        # Choose swap positions without replacement
+        chosen = self.rng.choice(candidates, size=num_swaps, replace=False)
+
+        arr_swapped = arr.copy()
+        for c in chosen:
+            arr_swapped[:, [c, c + 1]] = arr_swapped[:, [c + 1, c]]
+
+        return arr_swapped

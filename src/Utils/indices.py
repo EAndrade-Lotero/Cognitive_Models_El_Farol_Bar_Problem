@@ -31,7 +31,8 @@ class AlternationIndex:
                 num_episodes: Optional[int]=20,
                 max_agents: Optional[int]=8, 
                 max_epsilon: Optional[float]=0.025,
-                seed: Optional[Union[int, None]]=None
+                seed: Optional[Union[int, None]]=None,
+                fancy_2P: Optional[bool]=False,
             ) -> None:
         self.num_points = num_points
         self.num_rounds = num_rounds
@@ -39,6 +40,7 @@ class AlternationIndex:
         self.max_epsilon = max_epsilon
         self.num_episodes = num_episodes
         self.seed = seed
+        self.fancy_2P = fancy_2P
         self.rng = np.random.default_rng(seed=seed)
         self.configuration_points = self.create_configurations()
         # self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
@@ -331,7 +333,8 @@ class AlternationIndex:
                 num_rounds=self.num_rounds,
                 epsilon=epsilon,
                 num_episodes=num_episodes,
-                seed=self.seed
+                seed=self.seed,
+                fancy_2P=self.fancy_2P
             )
             eq_generator.debug = False
             df_alternation = eq_generator.generate_data(data_type)
@@ -423,18 +426,57 @@ class AlternationIndex:
         }
         return dict_check
     
-    def create_configurations(self):
-        range_epsilon = np.linspace(0, self.max_epsilon, 10)
-        range_num_agents = list(set(np.linspace(2, self.max_agents, 10)))
-        pairs = product(range_num_agents, range_epsilon)
-        configurations = list()
-        for num_agents, epsilon in pairs:
-            num_agents = int(num_agents)
-            for B in range(1, num_agents):
-                triplet = (num_agents, B / num_agents, epsilon)
-                configurations.append(triplet)
-        if len(configurations) >= self.num_points:
-            configurations = self.rng.choice(configurations, size=self.num_points, replace=False)
-        else:
-            print('Warning: Not enough configurations, using all')
+    def create_configurations(self, beta: float = 1.0, gamma: float = 1.0):
+        """
+        Create biased configurations:
+        - Smaller num_agents are more likely (p(n) ∝ 1 / n^beta).
+        - B is more likely at the extremes (p(B|n) ∝ min(B, n-B)^(-gamma)).
+        Uses self.rng (numpy.random.Generator) and returns up to self.num_points unique triplets:
+            (num_agents, B/num_agents, epsilon)
+        """
+        if self.max_agents < 2:
+            raise ValueError("max_agents must be at least 2")
+
+        # Epsilon values as before (uniform grid); you can bias these too if desired.
+        eps_values = np.linspace(0.0, self.max_epsilon, 10)
+
+        # Distribution over number of agents (favor small n)
+        n_vals = np.arange(2, self.max_agents + 1)
+        n_weights = 1.0 / (n_vals ** beta)
+        n_probs = n_weights / n_weights.sum()
+
+        configurations = set()  # to avoid repetitions
+        # Cap attempts to avoid an endless loop if the space is small
+        max_attempts = max(10 * self.num_points, 1000)
+        attempts = 0
+
+        while len(configurations) < self.num_points and attempts < max_attempts:
+            attempts += 1
+
+            # Sample num_agents with bias towards small values
+            n = int(self.rng.choice(n_vals, p=n_probs))
+
+            # Sample epsilon uniformly from grid (can also bias if needed)
+            epsilon = float(self.rng.choice(eps_values))
+
+            # Build U-shaped distribution over B in {1,...,n-1}
+            if n > 1:
+                Bs = np.arange(1, n)  # 1..n-1
+                # Heavier weight near extremes (1 or n-1)
+                min_side = np.minimum(Bs, n - Bs).astype(float)
+                # Ensure no division-by-zero (min_side >= 1 in this range)
+                B_weights = 1.0 / (min_side ** gamma)
+                B_probs = B_weights / B_weights.sum()
+                B = int(self.rng.choice(Bs, p=B_probs))
+            else:
+                # Degenerate (shouldn't happen since n>=2), but keep safe default
+                B = 1
+
+            triplet = (n, B / n, epsilon)
+            configurations.add(triplet)
+
+        configurations = list(configurations)
+        if len(configurations) < self.num_points:
+            print("Warning: Not enough unique configurations; returning all generated.")
+
         return configurations
