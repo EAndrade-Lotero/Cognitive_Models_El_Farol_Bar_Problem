@@ -415,7 +415,7 @@ class GetMeasurements :
         # Book keeping
         #-----------------------------
         for measure in measures:
-            assert(measure in ['attendance', 'efficiency', 'bounded_efficiency', 'inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
+            assert(measure in ['attendance', 'efficiency', 'bounded_efficiency', 'inequality', 'bounded_inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
         self.measures = measures
         self.normalize = normalize
         self.T = T
@@ -517,8 +517,10 @@ class GetMeasurements :
 
     @staticmethod
     def bounded_efficiency(df: pd.DataFrame) -> float:
-        # assert(GetMeasurements.one_group_only(df))
-        threshold = df['threshold'].mean()
+        assert(GetMeasurements.one_group_only(df))
+        thresholds = df['threshold'].unique()
+        assert(len(thresholds == 1)) 
+        threshold = thresholds[0]
         if threshold == 0:
             threshold = 1e-3
         return df['score'].mean() / threshold
@@ -535,6 +537,17 @@ class GetMeasurements :
         mean_scores = df.groupby(player_column)['score'].mean().reset_index()
         # mean_scores['score'] = (mean_scores['score'] + 1) / 2
         return mean_scores['score'].std()
+
+    @staticmethod
+    def bounded_inequality(df: pd.DataFrame) -> float:
+        assert(GetMeasurements.one_group_only(df))
+        thresholds = df['threshold'].unique()
+        assert(len(thresholds == 1)) 
+        threshold = thresholds[0]
+        player_column = PPT.get_player_column(df.columns)
+        mean_scores = df.groupby(player_column)['score'].mean().reset_index()
+        normalized_scores = mean_scores / threshold
+        return normalized_scores['score'].std()
 
     @staticmethod
     def entropy(df: pd.DataFrame) -> float:
