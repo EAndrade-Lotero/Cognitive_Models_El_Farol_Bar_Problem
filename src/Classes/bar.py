@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 from pathlib import Path
-from typing import Union
+from typing import Union, List, Tuple
 
 class Bar :
     '''
@@ -21,7 +21,7 @@ class Bar :
         self.threshold = threshold
         self.history = []
 
-    def step(self, decisions:list, update:bool=True) -> list :
+    def step(self, decisions:List[int], update:bool=True) -> Tuple[int, List[int]] :
         '''
         Computes the scores on the basis of the attendance.
         Input:
