@@ -29,6 +29,7 @@ class FocalRegion:
 
     def similarity_score(self, region1: np.ndarray, region2: np.ndarray) -> float:
         '''Jaccard similarity score between two regions.'''
+        assert region1.shape == region2.shape, f"Regions must have the same shape (but got {region1.shape} and {region2.shape})"
         return np.sum(region1 == region2) / np.prod(region1.shape)
         
     def get_region(self, n_cols: int, idx:int) -> np.ndarray:
@@ -58,6 +59,25 @@ class FocalRegion:
                 print(f'\tSimilarity score: {score}')
                 print('-'*60)
         return scores
+
+    def get_long_history_similarity_score(self, history: np.ndarray) -> List[float]:
+        scores = []
+        if self.debug:
+            print('='*60)
+        num_repetitions = history.shape[1] // self.focal_region.shape[1]
+        for j in range(self.focal_region.shape[1]):
+            score_segment_list = []
+            for i in range(num_repetitions):
+                start_col = j + i * self.focal_region.shape[1]
+                end_col = j + (i + 1) * self.focal_region.shape[1]
+                if end_col > history.shape[1]:
+                    continue
+                history_segment = history[:, start_col:end_col]
+                scores_segment = self.similarity_score(history_segment, self.focal_region)
+                score_segment_list.append(scores_segment)
+            score = np.mean(score_segment_list)
+            scores.append(score)
+        return max(scores)
 
     def get_action_preferences(
                 self, 
@@ -287,8 +307,8 @@ class SetFocalRegions:
             print('Equalizing region sizes')
         regions = self.equal_region_sizes([
             fair_regions, 
-            # segmented_regions, 
-            # mixed_regions
+            segmented_regions, 
+            mixed_regions
         ])
         self.focal_regions = regions
         if self.from_file:
@@ -368,7 +388,10 @@ class SetFocalRegions:
             action_preferences += preferences
         if self.debug:
             print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
-        action_preferences /= np.sum(action_preferences)
+        if np.sum(action_preferences) == 0:
+            action_preferences = np.array([0.5, 0.5])
+        else:
+            action_preferences /= np.sum(action_preferences)
         if self.debug:
             print(f'Normalized preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
         return action_preferences
