@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -17,6 +18,7 @@ class FocalRegion:
 
     def __init__(self, 
                 focal_region: np.ndarray,
+                category: str,
                 c: Optional[float] = 0.9,
                 steepness: Optional[float] = 10,
             ) -> None:
@@ -26,10 +28,11 @@ class FocalRegion:
         self.steepness = steepness
         self.debug = False
         self.shape = focal_region.shape
+        self.category = category
 
     def similarity_score(self, region1: np.ndarray, region2: np.ndarray) -> float:
         '''Jaccard similarity score between two regions.'''
-        assert region1.shape == region2.shape, f"Regions must have the same shape (but got {region1.shape} and {region2.shape})"
+        assert region1.shape == region2.shape, f"Regions must have the same shape (but got {region1.shape} and {region2.shape})\n{region1}\n\n{region2}"
         return np.sum(region1 == region2) / np.prod(region1.shape)
         
     def get_region(self, n_cols: int, idx:int) -> np.ndarray:
@@ -257,7 +260,7 @@ class SetFocalRegions:
         self.num_agents = num_agents
         self.threshold = threshold
         self.B = int(num_agents * threshold)
-        self.len_history = int(len_history)
+        self.len_history = min(int(len_history), num_agents)
         self.c = c
         self.steepness = steepness
         self.focal_regions = []
@@ -278,9 +281,12 @@ class SetFocalRegions:
         cherrypick.debug = False
         self.cherrypick = cherrypick
         self.from_file = from_file
+        self.create_file_path()
+
+    def create_file_path(self) -> None:
         # file = f'{self.max_regions}_regions'
         file = f'_{self.num_agents}_agents'
-        file += f'_{self.threshold}_threshold.npy'
+        file += f'_{self.threshold}_threshold.json'
         self.file = PATHS['focal_regions_path'] / file
 
     def add_history(self, obs: List[int]) -> None:
@@ -293,6 +299,8 @@ class SetFocalRegions:
 
     def generate_focal_regions(self) -> None:
         '''Generates focal regions.'''
+        if self.from_file and not self.file.exists():
+            raise FileNotFoundError(f"Focal regions file {self.file} does not exist.")
         if self.from_file and self.file.exists():
             if self.debug:
                 print(f'Loading focal regions from {self.file}')
@@ -320,11 +328,14 @@ class SetFocalRegions:
         '''Loads focal regions from file.'''
         if not self.file.exists():
             raise FileNotFoundError(f"Focal regions file {self.file} does not exist.")
-        data = np.load(self.file, allow_pickle=True)
+        data = json.load(open(self.file, 'r'))
         regions = []
-        for region in data:
+        for region_dict in data:
+            region = np.array(region_dict['region'])
+            category = region_dict.get('category')
             region_ = FocalRegion(
                 focal_region=region,
+                category=category,
                 c=self.c,
                 steepness=self.steepness
             )
@@ -333,14 +344,16 @@ class SetFocalRegions:
 
     def save_focal_regions(self) -> None:
         '''Saves focal regions to file.'''
-        data = np.array([region.focal_region for region in self.focal_regions])
-        np.save(self.file, data, allow_pickle=True)
+        data = [{'region':region.focal_region.tolist(), 'category':region.category} for region in self.focal_regions]
+        with open(self.file, 'w') as f:
+            json.dump(data, f)
 
     def generate_segmented_regions(self) -> List[FocalRegion]:
         regions = []
         for region in self.cherrypick.get_all_standard_segmented_equilibriums(period=self.num_agents):
             region_ = FocalRegion(
                 focal_region=region,
+                category='segmented',
                 c=self.c,
                 steepness=self.steepness
             )
@@ -352,6 +365,7 @@ class SetFocalRegions:
         for region in self.cherrypick.get_all_standard_fair_periodic_equilibrium(period=self.num_agents):
             region_ = FocalRegion(
                 focal_region=region,
+                category='alternation',
                 c=self.c,
                 steepness=self.steepness
             )
@@ -363,6 +377,7 @@ class SetFocalRegions:
         for region in self.cherrypick.get_all_standard_mixed_periodic_equilibrium(period=self.num_agents):
             region_ = FocalRegion(
                 focal_region=region,
+                category='mixed',
                 c=self.c,
                 steepness=self.steepness
             )

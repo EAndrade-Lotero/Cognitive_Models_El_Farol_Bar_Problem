@@ -1,0 +1,2 @@
+{"model_name":"FRA","deviance":-20834.0562283897,"AIC":41674.1124567794,"free_parameters":{"inverse_temperature":1.1169324618,"len_history":4.0,"c":1.0},"fixed_parameters":{}}
+{"model_name":"FRA+Payoff+Attendance","deviance":-18736.7629105271,"AIC":37485.5258210543,"free_parameters":{"inverse_temperature":5.1519804836,"bias":0.8405926304,"learning_rate":0.19721828,"len_history":3.9714874373,"c":0.720431924,"delta":0.1100910541},"fixed_parameters":{}}

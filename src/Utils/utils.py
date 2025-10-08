@@ -65,7 +65,10 @@ class PPT :
         df1 = PPT.drop_duplicates(df1)
         df2 = PPT.drop_duplicates(df2)
         # Dictionary with correct column names
-        standard_columns = ['model', 'threshold', 'num_agents', 'id_sim', 'id_player', 'round', 'decision', 'score']
+        standard_columns = [
+            'model', 'treatment', 'threshold', 'num_agents', 'id_sim',
+            'id_player', 'round', 'decision', 'score'
+        ]
         # Rename columns
         df1 = PPT.rename_columns(df1)
         df2 = PPT.rename_columns(df2)
