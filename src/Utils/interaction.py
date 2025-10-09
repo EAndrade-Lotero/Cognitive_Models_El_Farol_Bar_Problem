@@ -643,19 +643,6 @@ class Performer :
         num_rounds = simulation_parameters['num_rounds']
         num_episodes = simulation_parameters['num_episodes']
         verbose = simulation_parameters['verbose']
-        # #-------------------------------
-        # # Check if focal regions are required
-        # #-------------------------------
-        # if 'FRA' in agent_class.name():
-        #     # Create set of focal regions
-        #     sfr = SetFocalRegions(
-        #         num_agents=fixed_parameters['num_agents'],
-        #         threshold=fixed_parameters['threshold'],
-        #         len_history=free_parameters['len_history'], 
-        #         max_regions=free_parameters['max_regions']
-        #     )
-        #     sfr.generate_focal_regions()
-        #     fixed_parameters['sfr'] = sfr
         #-------------------------------
         # Create agents
         #-------------------------------
@@ -666,7 +653,7 @@ class Performer :
                 n=n
             ) for n in range(num_agents)
         ]
-        print(agents[0].sfr)
+        # print(agents[0].sfr)
         #-------------------------------
         # Create bar
         #-------------------------------

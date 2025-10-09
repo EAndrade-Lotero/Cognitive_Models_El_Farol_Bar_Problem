@@ -264,7 +264,7 @@ class SetFocalRegions:
         self.c = c
         self.steepness = steepness
         self.focal_regions = []
-        self.max_regions = int(max_regions)
+        self.max_regions = min(int(max_regions), num_agents*2)
         self.history = None
         self.debug = False
         if seed is None:
