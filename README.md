@@ -10,7 +10,7 @@ The project includes:
 
 ---
 
-## 📊 Overview
+## Overview
 
 The El Farol Bar Problem serves as a framework for exploring decision-making under limited coordination. This project investigates how individuals learn and adapt in such settings by modeling their behavior using various cognitive strategies and comparing these models to experimental outcomes.
 
@@ -18,7 +18,7 @@ The repository includes data, simulation code, and model fitting routines to ans
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 1. [Code](https://github.com/EAndrade-Lotero/Cognitive_Models_El_Farol_Bar_Problem/blob/main/src/Classes/cognitive_model_agents.py) implementing cognitive models and [jupyter notebooks](https://github.com/EAndrade-Lotero/Cognitive_Models_El_Farol_Bar_Problem/tree/main/Notebooks) to test them.
 2. [Helper functions and classes](https://github.com/EAndrade-Lotero/Cognitive_Models_El_Farol_Bar_Problem/tree/main/src/Utils).
