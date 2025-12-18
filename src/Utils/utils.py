@@ -76,6 +76,34 @@ class PPT :
         df1 = df1[standard_columns]
         df2 = df2[standard_columns]
         return pd.concat([df1, df2], ignore_index=True)
+    
+    @staticmethod
+    def concat_dfs_measures(df1:pd.DataFrame, df2:pd.DataFrame, measures:List[str]) -> pd.DataFrame:
+        # Create dataframe copies
+        df1 = df1.copy()
+        df2 = df2.copy()
+        # Check duplicated columns
+        df1 = PPT.drop_duplicates(df1)
+        df2 = PPT.drop_duplicates(df2)
+        # Rename columns
+        df1 = PPT.rename_columns(df1)
+        df2 = PPT.rename_columns(df2)
+        # Drop extra columns
+        # Correct column names
+        standard_columns = [
+            'model', 'treatment', 'threshold', 'num_agents', 'id_sim',
+            'id_player', 'round', 'decision', 'score'
+        ] + measures # Add columns for measures
+        remaining_columns = [
+            column for column in standard_columns 
+            if (
+                column in df1.columns
+                and column in df2.columns
+            )
+        ] 
+        df1 = df1[remaining_columns]
+        df2 = df2[remaining_columns]
+        return pd.concat([df1, df2], ignore_index=True)
 
     @staticmethod
     def drop_duplicates(df:pd.DataFrame) -> pd.DataFrame:

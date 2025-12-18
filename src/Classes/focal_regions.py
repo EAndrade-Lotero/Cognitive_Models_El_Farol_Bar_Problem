@@ -74,7 +74,7 @@ class FocalRegion:
                 start_col = j + i * self.focal_region.shape[1]
                 end_col = j + (i + 1) * self.focal_region.shape[1]
                 if end_col > history.shape[1]:
-                    continue
+                    break
                 history_segment = history[:, start_col:end_col]
                 scores_segment = self.similarity_score(history_segment, self.focal_region)
                 score_segment_list.append(scores_segment)
@@ -476,6 +476,9 @@ class SetFocalRegions:
             cadena += f"Region {i}\n"
             cadena += str(region) + '\n'
         return cadena
+    
+    def __len__(self):
+        return len(self.focal_regions)
 
 
 

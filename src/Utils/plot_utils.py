@@ -151,7 +151,7 @@ class PlotStandardMeasures :
         Output:
             - None.
         '''
-        assert(measure in self.standard_measures), f'Measure {measure} cannot be ploted by this class.'
+        assert(measure in self.standard_measures), f'Measure {measure} cannot be ploted by this class. Try one of {self.standard_measures}'
         num_models = kwargs['num_models']
         vs_models = kwargs['vs_models']
         # Create the plot canvas
