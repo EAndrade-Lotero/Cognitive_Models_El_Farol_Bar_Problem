@@ -88,17 +88,19 @@ class TransitionsFrequencyMatrix :
             ) -> None:
         self.num_agents = num_agents
         self.round_dec = round_dec
-        num_rows = np.power(2, self.num_agents)
-        num_cols = np.power(2, self.num_agents)
+        self.num_rows = np.power(2, self.num_agents)
+        self.num_cols = np.power(2, self.num_agents)
+        self.uniform = uniform
         if uniform:
-            self.trans_freqs = np.ones((num_rows, num_cols)) * (1 / num_cols)
+            self.trans_freqs = np.ones((self.num_rows, self.num_cols)) * (1 / self.num_cols)
         else:
-            self.trans_freqs = np.zeros((num_rows, num_cols))
+            self.trans_freqs = np.zeros((self.num_rows, self.num_cols))
 
     def reset(self):
-        num_rows = np.power(2, self.num_agents)
-        num_cols = np.power(2, self.num_agents)
-        self.trans_freqs = np.ones((num_rows, num_cols)) * (1 / num_cols)
+        if self.uniform:
+            self.trans_freqs = np.ones((self.num_rows, self.num_cols)) * (1 / self.num_cols)
+        else:
+            self.trans_freqs = np.zeros((self.num_rows, self.num_cols))
 
     def __len__(self) -> int:
         return self.trans_freqs.shape[0]
@@ -164,10 +166,11 @@ class TransitionsFrequencyMatrix :
             )
 
     def __str__(self) -> str:
-        states = list(product([0,1], repeat=self.num_agents))
-        table = PrettyTable(field_names=[''] + states)
-        for x in states:
-            row = [x] + [round(self((x,y)), self.round_dec) for y in states]
+        row_states = list(product([0,1], repeat=int(np.power(self.num_rows, 0.5))))
+        col_states = list(product([0,1], repeat=int(np.power(self.num_cols, 0.5))))
+        table = PrettyTable(field_names=[''] + col_states)
+        for x in row_states:
+            row = [x] + [round(self((x,y)), self.round_dec) for y in col_states]
             table.add_row(row)
         return str(table)
 

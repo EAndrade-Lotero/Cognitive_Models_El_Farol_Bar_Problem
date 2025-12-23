@@ -343,7 +343,53 @@ class ConditionalEntropy :
         for transition in df_transitions['transition'].values:
             tm.increment(transition)
         return tm
-    
+
+    def get_2nd_order_contidional_entropy(self) -> List[float]:
+        M = self.data['round'].unique().max()
+        df = pd.DataFrame(self.data[self.data['round'] >= (M - self.T)]).reset_index(drop=True)
+        conditional_entropy = list()
+        for group, df in df.groupby(self.group_column):
+            conditional_entropy.append(self.get_2nd_order_group_conditional_entropy(df))
+        return conditional_entropy
+
+    def get_2nd_order_group_conditional_entropy(
+                self,
+                df: pd.DataFrame
+            ) -> float:
+        tm = self.get_2nd_order_group_transitions(df)
+        ce = self.calculate_conditional_entropy(tm)
+        return ce
+        
+    def get_2nd_order_group_transitions(
+                self,
+                df: pd.DataFrame
+            ) -> TransitionsFrequencyMatrix:
+        # Get the number of agents in group
+        num_agents = self.get_df_num_agents(df)
+        # Create states followed by group
+        states = list()
+        for round_, round_data in df.groupby('round'):
+            state = round_data[self.decision_column].values.tolist()
+            states.append(state)
+        # Create transition dataframe
+        df_transitions = pd.DataFrame({
+            '2_prev_states': [tuple(states[i] + states[i+1]) for i in range(len(states) - 2)],
+            'next_state': states[2:]
+        }).dropna()
+        df_transitions['transition'] = df_transitions[['2_prev_states', 'next_state']].apply(lambda x: tuple((tuple(x['2_prev_states']), tuple(x['next_state']))), axis=1)
+        # Create Transition frequency matrix
+        tm = TransitionsFrequencyMatrix(
+            num_agents=num_agents,
+            uniform=False
+        )
+        num_cols = np.power(2, num_agents)
+        num_rows = np.power(2, 2 * num_agents)
+        tm.num_rows = num_rows
+        tm.trans_freqs = np.zeros((num_rows, num_cols))
+        for transition in df_transitions['transition'].values:
+            tm.increment(transition)
+        return tm
+
     def calculate_conditional_entropy(
                 self,
                 tm: TransitionsFrequencyMatrix,
@@ -432,6 +478,13 @@ class Fourier :
 
 
 class GetMeasurements :
+
+    standard_measures = [
+        'attendance', 'efficiency', 'inequality', 
+        'bounded_efficiency', 'bounded_inequality', 
+        'entropy', 'conditional_entropy', 'min_entropy',
+        'fourier', 'round_efficiency'
+    ]
     
     def __init__(
                 self,
@@ -446,7 +499,7 @@ class GetMeasurements :
         # Book keeping
         #-----------------------------
         for measure in measures:
-            assert(measure in ['attendance', 'efficiency', 'bounded_efficiency', 'inequality', 'bounded_inequality', 'entropy', 'conditional_entropy', 'fourier', 'round_efficiency']), f'Error: {measure} not in measures'
+            assert(measure in self.standard_measures), f'Error: {measure} not in measures'
         self.measures = measures
         self.normalize = normalize
         self.T = T
@@ -591,6 +644,15 @@ class GetMeasurements :
         # assert(GetMeasurements.one_group_only(df))
         ge = ConditionalEntropy(df, T=np.inf)
         return ge.get_group_conditional_entropy(df)
+
+    @staticmethod
+    def min_entropy(df: pd.DataFrame) -> float:
+        # assert(GetMeasurements.one_group_only(df))
+        ge = ConditionalEntropy(df, T=np.inf)
+        e1 = ge.get_group_entropy(df)
+        e2 = ge.get_group_conditional_entropy(df)
+        e3 = ge.get_2nd_order_group_conditional_entropy(df)
+        return min([e1, e2, e3])
 
     @staticmethod
     def fourier(df: pd.DataFrame) -> float:
