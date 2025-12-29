@@ -1455,8 +1455,10 @@ class FairnessM1(AttendanceM1) :
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        average_fairness = np.mean(self.decisions + [action]) - self.threshold
-        average_fairness = average_fairness * (1 - 2 * action)
+        power_value = np.mean(self.decisions + [action]) - self.threshold
+        average_fairness = np.exp(-1 * power_value)
+        # average_fairness = np.mean(self.decisions + [action]) - self.threshold
+        # average_fairness = average_fairness * (1 - 2 * action)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_fairness + (1 - self.bias) * payoff
@@ -1498,8 +1500,10 @@ class FairnessM2(AttendanceM2) :
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        average_fairness = np.mean(self.decisions + [action]) - self.threshold
-        average_fairness = average_fairness * (1 - 2 * action)
+        power_value = np.mean(self.decisions + [action]) - self.threshold
+        average_fairness = np.exp(-1 * power_value)
+        # average_fairness = np.mean(self.decisions + [action]) - self.threshold
+        # average_fairness = average_fairness * (1 - 2 * action)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_fairness + (1 - self.bias) * payoff
@@ -1548,8 +1552,10 @@ class FairnessM3(AttendanceM3) :
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        average_fairness = np.mean(self.decisions + [action]) - self.threshold
-        average_fairness = average_fairness * (1 - 2 * action)
+        power_value = np.mean(self.decisions + [action]) - self.threshold
+        average_fairness = np.exp(-1 * power_value)
+        # average_fairness = np.mean(self.decisions + [action]) - self.threshold
+        # average_fairness = average_fairness * (1 - 2 * action)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_fairness + (1 - self.bias) * payoff
