@@ -285,9 +285,9 @@ class ConditionalEntropy :
                 tm: ProxyDict,
                 rate: Optional[bool]=True
             ) -> float:
-        tm.normalize()
+        tm_normalized = tm.normalize()
         H = 0
-        probs = tm.as_array()
+        probs = tm_normalized.as_array()
         log_probs = np.log2(probs)
         log_probs[np.isinf(log_probs)] = 0
         prob_logs = np.multiply(probs, log_probs)
@@ -300,7 +300,7 @@ class ConditionalEntropy :
         if rate:
             N = np.log2(len(tm))
             H /= N
-        return(H)
+        return abs(H)
         
     def get_contidional_entropy(self) -> List[float]:
         M = self.data['round'].unique().max()
@@ -378,14 +378,13 @@ class ConditionalEntropy :
         }).dropna()
         df_transitions['transition'] = df_transitions[['2_prev_states', 'next_state']].apply(lambda x: tuple((tuple(x['2_prev_states']), tuple(x['next_state']))), axis=1)
         # Create Transition frequency matrix
-        tm = TransitionsFrequencyMatrix(
-            num_agents=num_agents,
-            uniform=False
-        )
         num_cols = np.power(2, num_agents)
         num_rows = np.power(2, 2 * num_agents)
-        tm.num_rows = num_rows
-        tm.trans_freqs = np.zeros((num_rows, num_cols))
+        tm = TransitionsFrequencyMatrix(
+            num_agents=num_agents,
+            size=(num_rows, num_cols),
+            uniform=False
+        )
         for transition in df_transitions['transition'].values:
             tm.increment(transition)
         return tm
@@ -396,22 +395,22 @@ class ConditionalEntropy :
                 rate: Optional[bool]=True
             ) -> float:
         H = 0
-        A = tm.trans_freqs
-        # Find conditional probabilities
-        row_sums = np.sum(A, axis=1, keepdims=True)
-        row_sums[row_sums == 0] = 1  # Prevent division by zero
-        cond_probs = A / row_sums
+        rel_freq = tm.as_array()
+        row_sums = np.sum(rel_freq, axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1
+        cond_probs = rel_freq / row_sums
+        cond_probs[np.isnan(cond_probs)] = 0
         log_cond_probs = np.log2(cond_probs)
         log_cond_probs[np.isinf(log_cond_probs)] = 0
         # Find joint probabilities
-        joint_probs = A / np.sum(A)
+        joint_probs = cond_probs / np.sum(cond_probs)
         # Calculate conditional entropy
         prob_logs = np.multiply(joint_probs, log_cond_probs)
         H = -sum(prob_logs.flatten())
         if rate:
-            N = np.log2(len(tm))
+            N = np.log2(tm.num_cols)
             H /= N
-        return(H)
+        return abs(H)
 
     def get_df_num_agents(
                 self, 
@@ -483,6 +482,7 @@ class GetMeasurements :
         'attendance', 'efficiency', 'inequality', 
         'bounded_efficiency', 'bounded_inequality', 
         'entropy', 'conditional_entropy', 'min_entropy',
+        'conditional_entropy_2nd_order',
         'fourier', 'round_efficiency'
     ]
     
@@ -644,6 +644,12 @@ class GetMeasurements :
         # assert(GetMeasurements.one_group_only(df))
         ge = ConditionalEntropy(df, T=np.inf)
         return ge.get_group_conditional_entropy(df)
+
+    @staticmethod
+    def conditional_entropy_2nd_order(df: pd.DataFrame) -> float:
+        # assert(GetMeasurements.one_group_only(df))
+        ge = ConditionalEntropy(df, T=np.inf)
+        return ge.get_2nd_order_group_conditional_entropy(df)
 
     @staticmethod
     def min_entropy(df: pd.DataFrame) -> float:

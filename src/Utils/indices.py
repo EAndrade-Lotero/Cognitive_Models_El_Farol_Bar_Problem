@@ -44,7 +44,12 @@ class AlternationIndex:
         self.rng = np.random.default_rng(seed=seed)
         self.configuration_points = self.create_configurations()
         # self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
-        self.measures = ['bounded_efficiency', 'inequality']
+        self.measures = [
+            'bounded_efficiency', 'inequality',
+            # 'entropy', 'conditional_entropy',
+            # 'conditional_entropy_2nd_order',
+            'min_entropy'
+        ]
         self.data = None
         self.full_data = None
         self.sklearn_coefficients = None

@@ -1376,17 +1376,17 @@ class PlotsAndMeasures :
             ce = ConditionalEntropy(grp)
             tm = ce.get_group_states(grp)
             # print(model, ce.get_entropy())
-            tm.normalize()
+            tm_normalized = tm.normalize()
             # Create the plot canvas
             if 'crop' in kwargs.keys() and kwargs['crop']:
                 df = pd.DataFrame({
-                    'state':[str(x) for x in tm.data_dict.keys() if tm.data_dict[x] != 0],
-                    'frequency': [x for x in tm.data_dict.values() if x != 0]
+                    'state':[str(x) for x in tm_normalized.data_dict.keys() if tm.data_dict[x] != 0],
+                    'frequency': [x for x in tm_normalized.data_dict.values() if x != 0]
                 })
             else:
                 df = pd.DataFrame({
-                    'state':[str(x) for x in tm.data_dict.keys()],
-                    'frequency': [x for x in tm.data_dict.values()]
+                    'state':[str(x) for x in tm_normalized.data_dict.keys()],
+                    'frequency': [x for x in tm_normalized.data_dict.values()]
                 })
             df['model'] = model
             df_list.append(df)
