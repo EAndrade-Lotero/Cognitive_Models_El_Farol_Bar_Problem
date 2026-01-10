@@ -395,18 +395,11 @@ class ConditionalEntropy :
                 rate: Optional[bool]=True
             ) -> float:
         H = 0
-        rel_freq = tm.as_array()
-        row_sums = np.sum(rel_freq, axis=1, keepdims=True)
-        row_sums[row_sums == 0] = 1
-        cond_probs = rel_freq / row_sums
-        cond_probs[np.isnan(cond_probs)] = 0
-        log_cond_probs = np.log2(cond_probs)
-        log_cond_probs[np.isinf(log_cond_probs)] = 0
+        log_cond_probs = tm.log_2_normalized()
         # Find joint probabilities
-        joint_probs = cond_probs / np.sum(cond_probs)
+        joint_probs = tm.all_normalized()
         # Calculate conditional entropy
-        prob_logs = np.multiply(joint_probs, log_cond_probs)
-        H = -sum(prob_logs.flatten())
+        H = -log_cond_probs.sum_multiplyed_by(joint_probs)
         if rate:
             N = np.log2(tm.num_cols)
             H /= N

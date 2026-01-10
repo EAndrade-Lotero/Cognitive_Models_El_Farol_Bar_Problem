@@ -1,0 +1,3 @@
+{"model_name":"Fairness-M1","deviance":-19965.9965024306,"AIC":39937.9930048612,"free_parameters":{"inverse_temperature":2.9474973564,"learning_rate":0.0929909071,"bias":0.845041443},"fixed_parameters":{}}
+{"model_name":"Fairness-M2","deviance":-21005.3032634057,"AIC":42016.6065268115,"free_parameters":{"inverse_temperature":61.5223033759,"learning_rate":0.0036536759,"bias":0.01},"fixed_parameters":{}}
+{"model_name":"Fairness-M3","deviance":-19506.4970849769,"AIC":39018.9941699537,"free_parameters":{"inverse_temperature":4.6781063208,"learning_rate":0.1672409125,"bias":0.741593326},"fixed_parameters":{}}

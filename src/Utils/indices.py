@@ -46,8 +46,8 @@ class AlternationIndex:
         # self.measures = ['bounded_efficiency', 'entropy', 'conditional_entropy', 'inequality']
         self.measures = [
             'bounded_efficiency', 'inequality',
-            # 'entropy', 'conditional_entropy',
-            # 'conditional_entropy_2nd_order',
+            'entropy', 'conditional_entropy',
+            'conditional_entropy_2nd_order',
             'min_entropy'
         ]
         self.data = None
@@ -58,7 +58,7 @@ class AlternationIndex:
         self.index_path = PATHS['index_path']
         self.priority = 'statsmodels'
         self.debug = True
-        self.alternation_threshold = 0.75
+        self.alternation_threshold = 0.7
 
     def __call__(self, df:pd.DataFrame) -> np.ndarray:
         '''Calculate the index from the dataframe'''

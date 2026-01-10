@@ -130,10 +130,14 @@ class TransitionsFrequencyMatrix :
         return self.default_value
     
     def iter_rows(self) -> List[Tuple[int]]:
-        return [self.get_state_from_index(i) for i in range(self.num_rows)]
+        return self.trans_freqs.keys()
     
     def iter_cols(self) -> List[Tuple[int]]:
-        return [self.get_state_from_index(i) for i in range(self.num_cols)]
+        keys = set()
+        for row in self.iter_rows():
+            row_dict = self.trans_freqs[row]
+            keys.update(row_dict.keys())
+        return list(keys)
 
     def row_sum(self, row:int) -> Union[int, float]:
         if row in self.trans_freqs.keys():
@@ -144,14 +148,35 @@ class TransitionsFrequencyMatrix :
         else:
             return self.num_cols * self.default_value
     
+    def log_2_normalized(self) -> 'TransitionsFrequencyMatrix':
+        log_2_normalized_tm = TransitionsFrequencyMatrix(
+            num_agents=self.num_agents,
+            size=(self.num_rows, self.num_cols),
+            round_dec=self.round_dec,
+            uniform=False
+        )
+        for row in self.iter_rows():
+            row_dict = self.trans_freqs[row]
+            row_sum = self.row_sum(row)
+            if row_sum == 0: row_sum = 1
+            for col in self.iter_cols():
+                transition = (row, col)
+                value = row_dict.get(col, 0) / row_sum
+                if value > 0:
+                    value = np.log2(value)
+                else:
+                    value = 0
+                log_2_normalized_tm.update(transition, value)
+        return log_2_normalized_tm
+
     def row_normalized(self) -> 'TransitionsFrequencyMatrix':
         normalized_tm = TransitionsFrequencyMatrix(
             num_agents=self.num_agents,
             size=(self.num_rows, self.num_cols),
             round_dec=self.round_dec,
-            uniform=True
+            uniform=False
         )
-        for row in self.trans_freqs.keys():
+        for row in self.iter_rows():
             row_dict = self.trans_freqs[row]
             row_sum = self.row_sum(row)
             if row_sum == 0: row_sum = 1
@@ -160,7 +185,45 @@ class TransitionsFrequencyMatrix :
                 value = row_dict.get(col, 0) / row_sum
                 normalized_tm.update(transition, value)
         return normalized_tm
-    
+
+    def all_normalized(self) -> 'TransitionsFrequencyMatrix':
+        normalized_tm = TransitionsFrequencyMatrix(
+            num_agents=self.num_agents,
+            size=(self.num_rows, self.num_cols),
+            round_dec=self.round_dec,
+            uniform=False
+        )
+        total_sum = self.sum_all()
+        if total_sum == 0: 
+            return normalized_tm
+        for row in self.iter_rows():
+            row_dict = self.trans_freqs[row]
+            row_sum = self.row_sum(row)
+            if row_sum == 0: row_sum = 1
+            for col in self.iter_cols():
+                transition = (row, col)
+                value = row_dict.get(col, 0) / total_sum
+                normalized_tm.update(transition, value)
+        return normalized_tm
+
+    def sum_all(self) -> float:
+        total = 0
+        for row in self.iter_rows():
+            total += self.row_sum(row)
+        return total
+
+    def sum_multiplyed_by(self, other:'TransitionsFrequencyMatrix') -> float:
+        all_rows = list(set(list(self.iter_rows()) + list(other.iter_rows())))
+        all_cols = list(set(list(self.iter_cols()) + list(other.iter_cols())))
+        total = 0
+        for row in all_rows:
+            for col in all_cols:
+                transition = (row, col)
+                value1 = self(transition)
+                value2 = other(transition)
+                total += value1 * value2
+        return total
+
     def get_states(self, transition: Tuple[List[int], List[int]]) -> Tuple[int, int]:
         prev_state, state = transition
         row = "".join(str(x) for x in prev_state)
@@ -224,8 +287,8 @@ class TransitionsFrequencyMatrix :
             )
 
     def __str__(self) -> str:
-        row_states = self.iter_rows()
-        col_states = self.iter_cols()
+        row_states = [self.get_state_from_index(i) for i in range(self.num_rows)]
+        col_states = [self.get_state_from_index(i) for i in range(self.num_cols)]
         table = PrettyTable(field_names=[''] + col_states)
         for x in row_states:
             row = [x] + [round(self((x, y)), self.round_dec) for y in col_states]
@@ -241,5 +304,9 @@ class TransitionsFrequencyMatrix :
                 my_array[row_idx, col_idx] = self.trans_freqs[row][col]
         return my_array
 
-
+    def row_sums(self) -> np.ndarray:
+        sums = np.zeros(self.num_rows)
+        for i, row in enumerate(self.iter_rows()):
+            sums[i] = self.row_sum(row)
+        return sums
 
