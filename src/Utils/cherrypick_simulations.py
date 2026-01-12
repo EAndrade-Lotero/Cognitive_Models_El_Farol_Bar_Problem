@@ -20,6 +20,7 @@ class CherryPickEquilibria:
                 num_episodes: Optional[int]=100,
                 seed: Optional[Union[int, None]]=None,
                 fancy_2P: Optional[bool]=False,
+                allow_shuffle: Optional[bool]=True
             ) -> None:
         self.num_agents = num_agents
         self.agents = list(range(self.num_agents))
@@ -127,7 +128,10 @@ class CherryPickEquilibria:
         return df
 
     def random_one_shot_equilibrium(self) -> np.ndarray:
-        go_agents = self.rng.choice(self.agents, size=self.B, replace=False)
+        if self.allow_shuffle:
+            go_agents = self.rng.choice(self.agents, size=self.B, replace=False)
+        else:
+            go_agents = [i for i in range(self.B)]
         if self.debug:
             print(f'Equilibrium of {self.B} agents:\n{go_agents}')
         return go_agents
@@ -144,14 +148,15 @@ class CherryPickEquilibria:
 
     def random_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
         periodic_equilibrium = self.get_fair_periodic_equilibrium(period)
-        if self.rng.random() < 0.8:
-            # Shuffle rows
-            np.random.shuffle(periodic_equilibrium)
-        else:
-            # Shuffle columns
-            periodic_equilibrium = periodic_equilibrium.T
-            np.random.shuffle(periodic_equilibrium)
-            periodic_equilibrium = periodic_equilibrium.T
+        if self.allow_shuffle:
+            if self.rng.random() < 0.8:
+                # Shuffle rows
+                np.random.shuffle(periodic_equilibrium)
+            else:
+                # Shuffle columns
+                periodic_equilibrium = periodic_equilibrium.T
+                np.random.shuffle(periodic_equilibrium)
+                periodic_equilibrium = periodic_equilibrium.T
         return periodic_equilibrium
 
     def random_mixed_periodic_equilibrium(self, period:int) -> np.ndarray:
@@ -162,7 +167,8 @@ class CherryPickEquilibria:
             num_seg=num_seg,
             period=period
         )
-        np.random.shuffle(mixed_equilibrium)
+        if self.allow_shuffle:
+            np.random.shuffle(mixed_equilibrium)
         return mixed_equilibrium
 
     def apply_epsilon(self, periodic_equilibrium:np.ndarray) -> np.ndarray:

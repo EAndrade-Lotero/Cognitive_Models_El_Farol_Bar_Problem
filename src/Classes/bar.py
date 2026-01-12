@@ -67,9 +67,13 @@ class Bar :
         history = self.history[-num_rounds:]
         len_padding = num_rounds - len(history)
         if len_padding > 0:
-            history = [[2 for _ in range(self.num_agents)] for i in range(len_padding)] + history
+            history = [[1 for _ in range(self.num_agents)] for i in range(len_padding)] + history
         # Convert the history into format player, round
-        decisions = [[h[i] for h in history] for i in range(self.num_agents)]
+        try:
+            decisions = [[h[i] for h in history] for i in range(self.num_agents)]
+        except Exception as e:
+            print(history[0])
+            raise e
         # Create plot
         if ax is None:
             fig, ax = plt.subplots(
@@ -166,3 +170,36 @@ class Bar :
         df["threshold"] = self.threshold
         df["num_agents"] = self.num_agents
         return df
+    
+    @staticmethod
+    def from_pandas(df:pd.DataFrame) -> 'Bar':
+        '''
+        Creates a Bar object from a pandas dataframe.
+        Input:
+            - df: pandas dataframe with the following six variables:
+            
+            Variables:
+                * id_sim: a unique identifier for the simulation
+                * threshold: the bar's threshold
+                * round: the round number
+                * attendance: the round's attendance
+                * id_player: the player's number
+                * decision: the player's decision
+                * score: the player's score
+                * model: the model's name
+                * convergence: the maximum difference between 
+                            two previous approximations of 
+                            probability estimates
+        Output:
+            - Bar object with the information from the dataframe.
+        '''
+        num_agents = df["id_player"].nunique()
+        threshold = df["threshold"].iloc[0]
+        num_rounds = df["round"].nunique()
+        bar = Bar(num_agents, threshold)
+        history = []
+        for r in range(num_rounds):
+            round_df = df[df["round"] == r + 1]
+            decisions = round_df["decision"].tolist()
+            bar.step(decisions)
+        return bar
