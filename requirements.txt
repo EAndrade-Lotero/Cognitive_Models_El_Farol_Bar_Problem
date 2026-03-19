@@ -3,3 +3,9 @@ numpy==1.23.5
 pandas==1.5.3
 seaborn==0.12.2
 tqdm==4.65.0
+joblib
+statsmodels
+torch
+bayes_opt
+scikit-learn
+prettytable
