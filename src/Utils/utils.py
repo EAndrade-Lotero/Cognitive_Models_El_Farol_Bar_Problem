@@ -268,7 +268,7 @@ class ConditionalEntropy :
         states = list()
         for round_, round_data in df.groupby('round'):
             state = round_data[self.decision_column].values
-            assert(len(state) == num_agents), f'{round_=}\n{round_data}'
+            assert(len(state) == num_agents), f'{len(state)} != {num_agents}\n{round_=}\n{round_data}'
             states.append(tuple(state))
         # Create a proxy dictionary
         all_states = list(product([0,1], repeat=num_agents))
@@ -473,10 +473,10 @@ class GetMeasurements :
 
     standard_measures = [
         'attendance', 'efficiency', 'inequality', 
-        'bounded_efficiency', 'bounded_inequality', 
+        'bounded_efficiency', 'bounded_inequality', 'gini_index',
         'entropy', 'conditional_entropy', 'min_entropy',
         'conditional_entropy_2nd_order',
-        'fourier', 'round_efficiency'
+        'fourier', 'round_efficiency',
     ]
     
     def __init__(
@@ -663,7 +663,24 @@ class GetMeasurements :
         group_column = PPT.get_group_column(df.columns)
         groups = df[group_column].unique()
         return len(groups) == 1
-    
+
+    @staticmethod    
+    def gini_index(df: pd.DataFrame) -> float:
+        df_ = df.copy()
+        player_column = PPT.get_player_column(df_.columns)
+        df_['score'] = df_['score'].values + 1
+        mean_scores = df_.groupby(player_column)['score'].mean().reset_index()
+        sorted_scores = mean_scores['score'].sort_values().values
+        n = len(sorted_scores)
+        if n == 0:
+            return 0.0
+        cumulative_scores = np.cumsum(sorted_scores)
+        total = cumulative_scores[-1]
+        if total <= 0 or not np.isfinite(total):
+            return 0.0
+        gini_index = (n + 1 - 2 * np.sum(cumulative_scores) / total) / n
+        return float(max(0.0, min(1.0, gini_index)))
+
 
 class Grid:
     '''Creates a most compact grid and ravels and unravels'''

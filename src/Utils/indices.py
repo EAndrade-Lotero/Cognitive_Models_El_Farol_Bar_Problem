@@ -65,7 +65,21 @@ class AlternationIndex:
         # Get index of alternation
         probabilities = self.calculate_probabilities('alternation', df)
         return probabilities
-    
+
+    def get_probabilities(self, df:pd.DataFrame) -> np.ndarray:
+        # Get index of category
+        classes = CherryPickEquilibria.get_categories()
+        idx_random = classes.index('random')
+        # Obtain probabilities from model
+        if self.model is None:
+            self.create_index_calculator()
+        if self.priority == 'cnn':
+            df_, _ = self.get_x_y_values(df)
+        else:
+            df_ = df[self.measures]
+        probabilities = self.model.predict_proba(df_)
+        return np.delete(probabilities, idx_random, axis=1)
+
     def calculate_probabilities(self, category:str, df:pd.DataFrame) -> np.ndarray:
         # Get index of category
         classes = CherryPickEquilibria.get_categories()
