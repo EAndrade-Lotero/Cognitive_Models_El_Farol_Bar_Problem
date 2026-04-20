@@ -550,18 +550,27 @@ class GetMeasurements :
 
     def get_measurements_all(self) -> pd.DataFrame:
         assert(len(self.measures) > 0)
+        # Pandas 3+ groupby().apply() omits grouping columns from the frame passed
+        # to func (include_groups=True is disallowed). Measurement code expects
+        # id_sim / room / group columns, so we iterate groups explicitly.
         init = True
         for measure in self.measures:
             fun = getattr(GetMeasurements, measure)
+            rows = []
+            for key, grp in self.data.groupby(self.columns):
+                if isinstance(key, tuple):
+                    row = dict(zip(self.columns, key))
+                else:
+                    row = {self.columns[0]: key}
+                row[measure] = fun(grp)
+                rows.append(row)
+            aux = pd.DataFrame(rows)
             if init:
-                df = self.data.groupby(self.columns).apply(fun).reset_index().dropna()
-                df.rename(columns={0:measure}, inplace=True)
+                df = aux.dropna()
                 if self.normalize:
                     df[measure] = (df[measure]-df[measure].mean())/df[measure].std()
                 init = False
             else:
-                aux = self.data.groupby(self.columns).apply(fun).reset_index()
-                aux.rename(columns={0:measure}, inplace=True)
                 if self.normalize:
                     aux[measure] = (aux[measure]-aux[measure].mean())/aux[measure].std()
                 df = pd.merge(df, aux, on=self.columns, how='inner')
