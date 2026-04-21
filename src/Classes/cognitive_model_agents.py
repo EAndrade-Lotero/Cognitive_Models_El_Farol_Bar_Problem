@@ -1452,11 +1452,23 @@ class FairnessM1(AttendanceM1) :
             n=n
         )
 
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.individual_threshold = free_parameters["individual_threshold"]
+
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        power_value = np.mean(self.decisions + [action]) - self.threshold
-        average_fairness = np.exp(-1 * power_value)
+        relevant_comparison = self.individual_threshold
+        # relevant_comparison = np.mean(obs_state)
+        average_fairness = relevant_comparison - np.mean(self.decisions + [action])
+        average_fairness = average_fairness * (2 * action - 1)
+        # power_value = np.mean(self.decisions + [action]) - self.threshold
+        # average_fairness = np.exp(-1 * power_value)
         # average_fairness = np.mean(self.decisions + [action]) - self.threshold
         # average_fairness = average_fairness * (1 - 2 * action)
         # Get payoff
@@ -1472,6 +1484,14 @@ class FairnessM1(AttendanceM1) :
     def name():
         return 'Fairness-M1'
 
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM1.bounds(fixed_parameters)
+        bounds.update({
+            'bias': (0, 1),
+            'individual_threshold': (0, 1),
+        })
+        return bounds
 
 class FairnessM2(AttendanceM2) :
     '''
@@ -1500,8 +1520,11 @@ class FairnessM2(AttendanceM2) :
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        power_value = np.mean(self.decisions + [action]) - self.threshold
-        average_fairness = np.exp(-1 * power_value)
+        power_value = self.threshold - np.mean(self.decisions + [action])
+        average_fairness = power_value
+        # power_value = np.mean(self.decisions + [action]) - self.threshold
+        # average_fairness = np.exp(-5 * power_value)
+        # average_fairness = np.clip(average_fairness, 0, 1)
         # average_fairness = np.mean(self.decisions + [action]) - self.threshold
         # average_fairness = average_fairness * (1 - 2 * action)
         # Get payoff
