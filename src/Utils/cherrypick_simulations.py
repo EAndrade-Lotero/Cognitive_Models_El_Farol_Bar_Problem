@@ -37,7 +37,8 @@ class CherryPickEquilibria:
         self.fancy_2P = fancy_2P
         self.rng = np.random.default_rng(seed=seed)
         self.categories = 'alternation', 'mixed', 'random', 'segmentation'
-        self.debug = True
+        self.allow_shuffle = allow_shuffle
+        self.debug = False
 
     def generate_data(self, kind:str) -> pd.DataFrame:
         assert(kind in self.categories)
@@ -53,6 +54,7 @@ class CherryPickEquilibria:
                 df = self.generate_mixed_simulation()
             else:
                 df = self.generate_random_simulation()
+            df['kind'] = kind
             df['id_sim'] = f'{self.num_agents}-{self.threshold}-{self.epsilon}-{kind}-{i}'
             df_list.append(df)
         df = pd.concat(df_list, ignore_index=True)

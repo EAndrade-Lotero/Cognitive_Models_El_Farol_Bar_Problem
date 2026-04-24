@@ -1475,9 +1475,11 @@ class FairnessM1(AttendanceM1) :
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_fairness + (1 - self.bias) * payoff
         if self.debug:
-            print(f'Average fairness: {average_fairness}')
+            print(f"Action taken: {action}")
+            print(f'Action dependent Average fairness: {average_fairness}')
             print(f'Payoff: {payoff}')
             print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+            print(f"Preferences: {self.determine_action_preferences()}")
         return G
 
     @staticmethod
