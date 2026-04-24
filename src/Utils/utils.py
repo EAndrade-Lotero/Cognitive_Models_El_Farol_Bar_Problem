@@ -607,9 +607,18 @@ class GetMeasurements :
         thresholds = df['threshold'].unique()
         assert(len(thresholds == 1)) 
         threshold = thresholds[0]
-        if threshold == 0:
-            threshold = 1e-3
-        return df['score'].mean() / threshold
+
+        num_agents_column = PPT.get_num_player_column(df)
+        num_agents = df[num_agents_column].unique()
+        assert(len(num_agents) == 1)
+        num_agents = num_agents[0]
+
+        bar_capacity = int(threshold * num_agents)
+        real_threshold = bar_capacity / num_agents
+        if real_threshold == 0:
+            real_threshold = 1e-3
+
+        return df['score'].mean() / real_threshold
 
     @staticmethod
     def round_efficiency(df: pd.DataFrame) -> float:
