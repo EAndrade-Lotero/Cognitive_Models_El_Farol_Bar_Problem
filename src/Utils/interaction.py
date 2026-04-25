@@ -218,7 +218,6 @@ class Episode :
             agent.sfr = sfr
 
 
-
 class Experiment :
     '''
     Compares given models on a number of measures.

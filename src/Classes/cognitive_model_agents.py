@@ -1165,18 +1165,22 @@ class AttendanceM1(PayoffM1) :
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
+        self.forget = free_parameters['forget']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        average_go = np.mean(self.decisions + [action])
+        # average_go = np.mean(self.decisions + [action])
+        average_go = np.mean(self.decisions) * (1 - self.forget) + action * self.forget
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_go + (1 - self.bias) * payoff
         if self.debug:
-            print(f'Average go: {average_go}')
+            print(f"Action taken: {action}")
+            print(f'Action dependent Average go: {average_go}')
             print(f'Payoff: {payoff}')
             print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+            print(f"Preferences: {self.determine_action_preferences()}")
         return G
 
     @staticmethod
@@ -1187,7 +1191,8 @@ class AttendanceM1(PayoffM1) :
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM1.bounds(fixed_parameters)
         bounds.update({
-            'bias': (0, 1)
+            'bias': (0, 1),
+            'forget': (0, 1)
         })
         return bounds
 
@@ -1222,11 +1227,13 @@ class AttendanceM2(PayoffM2) :
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
+        self.forget = free_parameters['forget']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        average_go = np.mean(self.decisions + [action])
+        # average_go = np.mean(self.decisions + [action])
+        average_go = np.mean(self.decisions) * self.forget + action * (1 - self.forget)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_go + (1 - self.bias) * payoff
@@ -1244,7 +1251,8 @@ class AttendanceM2(PayoffM2) :
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM2.bounds(fixed_parameters)
         bounds.update({
-            'bias': (0, 1)
+            'bias': (0, 1),
+            'forget': (0, 1)
         })
         return bounds
     
@@ -1278,11 +1286,13 @@ class AttendanceM3(PayoffM3) :
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
+        self.forget = free_parameters['forget']
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        average_go = np.mean(self.decisions + [action])
+        # average_go = np.mean(self.decisions + [action])
+        average_go = np.mean(self.decisions) * self.forget + action * (1 - self.forget)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_go + (1 - self.bias) * payoff
@@ -1300,7 +1310,8 @@ class AttendanceM3(PayoffM3) :
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM3.bounds(fixed_parameters)
         bounds.update({
-            'bias': (0, 1)
+            'bias': (0, 1),
+            'forget': (0, 1)
         })
         return bounds
 
@@ -1460,27 +1471,35 @@ class FairnessM1(AttendanceM1) :
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.individual_threshold = free_parameters["individual_threshold"]
 
-    def _get_G(self, obs_state: Tuple[int]) -> float:
+    def learn(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
-        # Get go frequency
+        # Comparison is set to the individual threshold
         relevant_comparison = self.individual_threshold
-        # relevant_comparison = np.mean(obs_state)
-        average_fairness = relevant_comparison - np.mean(self.decisions + [action])
+        # Get average go using forgetting
+        # average_go = np.mean(self.decisions) * (1 - self.forget) + action * self.forget
+        average_go = np.mean(self.decisions + [action])
+        # Compare
+        # average_fairness = relevant_comparison - average_go
+        average_fairness = FairnessM1.sigmoid(x=average_go, x0=relevant_comparison)
+        # Determine sign depending on action
         average_fairness = average_fairness * (2 * action - 1)
-        # power_value = np.mean(self.decisions + [action]) - self.threshold
-        # average_fairness = np.exp(-1 * power_value)
-        # average_fairness = np.mean(self.decisions + [action]) - self.threshold
-        # average_fairness = average_fairness * (1 - 2 * action)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_fairness + (1 - self.bias) * payoff
+        self.Q[action] = G
+        self.Q[1 - action] = 0
         if self.debug:
             print(f"Action taken: {action}")
+            print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
             print(f'Action dependent Average fairness: {average_fairness}')
             print(f'Payoff: {payoff}')
             print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
-            print(f"Preferences: {self.determine_action_preferences()}")
-        return G
+            print(f"Preferences from self.Q: {self.Q}")
+
+    @staticmethod
+    def sigmoid(x, x0=0, k=20):
+        import numpy as np
+        return 1 / (1 + np.exp(-k * (x - x0)))
 
     @staticmethod
     def name():
@@ -1491,9 +1510,11 @@ class FairnessM1(AttendanceM1) :
         bounds = PayoffM1.bounds(fixed_parameters)
         bounds.update({
             'bias': (0, 1),
+            'forget': (0, 1),
             'individual_threshold': (0, 1),
         })
         return bounds
+
 
 class FairnessM2(AttendanceM2) :
     '''
@@ -1519,24 +1540,40 @@ class FairnessM2(AttendanceM2) :
             n=n
         )
 
-    def _get_G(self, obs_state: Tuple[int]) -> float:
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.individual_threshold = free_parameters["individual_threshold"]
+
+    def learn(
+                self,
+                obs_state: Tuple[int],
+            ) -> None:
+        '''
+        Agent updates their action preferences
+        Input:
+            - obs_state, list of decisions on previous round
+        '''
+        # Get previous state
+        previous_state = self.prev_state_
+        prev_action, attendance = self._get_index(previous_state)
+        # Get action
         action = obs_state[self.number]
         # Get go frequency
-        power_value = self.threshold - np.mean(self.decisions + [action])
-        average_fairness = power_value
-        # power_value = np.mean(self.decisions + [action]) - self.threshold
-        # average_fairness = np.exp(-5 * power_value)
-        # average_fairness = np.clip(average_fairness, 0, 1)
-        # average_fairness = np.mean(self.decisions + [action]) - self.threshold
-        # average_fairness = average_fairness * (1 - 2 * action)
+        relevant_comparison = self.individual_threshold
+        average_go = np.mean(self.decisions) * self.forget + action * (1 - self.forget)
+        average_fairness = relevant_comparison - average_go
+        average_fairness = average_fairness * (2 * action - 1)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_fairness + (1 - self.bias) * payoff
+        self.Q[prev_action, attendance, action] = G
+        self.Q[prev_action, attendance, 1 - action] = 0
         if self.debug:
-            print(f'Average fairness: {average_fairness}')
-            print(f'Payoff: {payoff}')
-            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
-        return G
+            print(f'Q[({prev_action}, {attendance}), {action}] = {self.Q[prev_action, attendance, action]}')
 
     @staticmethod
     def name():
@@ -1544,9 +1581,11 @@ class FairnessM2(AttendanceM2) :
 
     @staticmethod
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
-        bounds = PayoffM2.bounds(fixed_parameters)
+        bounds = PayoffM1.bounds(fixed_parameters)
         bounds.update({
-            'bias': (0, 0.01)
+            'bias': (0, 1),
+            'forget': (0, 1),
+            'individual_threshold': (0, 1),
         })
         return bounds
     
@@ -1574,13 +1613,20 @@ class FairnessM3(AttendanceM3) :
             n=n
         )
 
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.individual_threshold = free_parameters["individual_threshold"]
+
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
         # Get go frequency
-        power_value = np.mean(self.decisions + [action]) - self.threshold
-        average_fairness = np.exp(-1 * power_value)
-        # average_fairness = np.mean(self.decisions + [action]) - self.threshold
-        # average_fairness = average_fairness * (1 - 2 * action)
+        relevant_comparison = self.individual_threshold
+        average_fairness = relevant_comparison - np.mean(self.decisions + [action])
+        average_fairness = average_fairness * (2 * action - 1)
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_fairness + (1 - self.bias) * payoff
@@ -1589,6 +1635,16 @@ class FairnessM3(AttendanceM3) :
             print(f'Payoff: {payoff}')
             print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
         return G
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM1.bounds(fixed_parameters)
+        bounds.update({
+            'bias': (0, 1),
+            'forget': (0, 1),
+            'individual_threshold': (0, 1),
+        })
+        return bounds
 
     @staticmethod
     def name():
