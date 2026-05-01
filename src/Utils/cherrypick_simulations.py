@@ -1,8 +1,10 @@
+import math
 import numpy as np
 import pandas as pd
 
 from copy import deepcopy
 from tqdm.auto import tqdm
+from bayes_opt import BayesianOptimization
 from itertools import permutations, combinations
 from typing import Optional, Union, Tuple, List
 
@@ -36,7 +38,7 @@ class CherryPickEquilibria:
         self.seed = seed
         self.fancy_2P = fancy_2P
         self.rng = np.random.default_rng(seed=seed)
-        self.categories = 'alternation', 'mixed', 'random', 'segmentation'
+        self.categories = ['alternation', 'segmentation', 'mixed', 'random', 'sober']
         self.allow_shuffle = allow_shuffle
         self.debug = False
 
@@ -52,6 +54,8 @@ class CherryPickEquilibria:
                 if self.num_agents == 2:
                     raise Exception('Mixed simulation is not available for 2 agents')
                 df = self.generate_mixed_simulation()
+            elif kind == 'sober':
+                df = self.generate_sober_simulation()
             else:
                 df = self.generate_random_simulation()
             df['kind'] = kind
@@ -85,6 +89,46 @@ class CherryPickEquilibria:
         return df
 
     def generate_random_simulation(self) -> pd.DataFrame:
+        go_array = self.rng.integers(low=0, high=2, size=(self.num_agents, self.num_rounds)).astype(int)
+        df = self.generate_dataframe(go_array)
+        return df
+
+    def generate_sober_simulation(self) -> pd.DataFrame:
+        p = self.get_optimal_sober_probability()
+        go_array = (self.rng.random((self.num_agents, self.num_rounds)) < p).astype(int)
+        df = self.generate_dataframe(go_array)
+        df['p_sober'] = p
+        return df
+
+    def Z(self, p, N=10, B=6):
+
+        def binomial(k, N, p):
+            a1_probs = p ** k
+            a2_probs = (1-p) ** (N - k)
+            combination = math.comb(N, k)
+            return combination * a1_probs * a2_probs
+
+        sum_below_B = sum([k*binomial(k, N, p) for k in range(B+1)])
+        sum_above_B = sum([k*binomial(k, N, p) for k in range(B+1, N+1)])
+        return sum_below_B - sum_above_B
+
+    def get_optimal_sober_probability(self) -> float:
+        # Bounded region of parameter space
+        pbounds = {'p': (0, 1)}
+        optimizer = BayesianOptimization(
+            f=lambda p: self.Z(p, self.num_agents, int(self.threshold * self.num_agents)),
+            pbounds=pbounds,
+            random_state=1,
+            verbose=False
+        )
+        optimizer.maximize(
+            init_points=10,
+            n_iter=10,
+        )
+        result = optimizer.max
+        return result['params']['p']        
+
+    def DEPRECATED_generate_random_simulation(self) -> pd.DataFrame:
         # Keep backup copy of epsilon and augment epsilon for lots of noise
         bkup_epsilon = deepcopy(self.epsilon)
         self.epsilon = 0.05 + self.rng.integers(low=0, high=10) / 18
