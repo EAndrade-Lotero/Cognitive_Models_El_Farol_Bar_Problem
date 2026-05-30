@@ -2,6 +2,8 @@
 Classes with cognitive model agents' rules
 '''
 import numpy as np
+import matplotlib.pyplot as plt
+
 from math import comb
 from copy import deepcopy
 from itertools import product
@@ -256,6 +258,63 @@ class CogMod() :
         return {
             'inverse_temperature': (1, 64),
         }
+
+    def plot_action_probabilities(self):
+
+        # Get preferences
+        go_pct = self.go_probability() * 100
+        stay_pct = 100 - go_pct
+
+        fig, ax = plt.subplots(figsize=(6, 1.5))
+
+        # Draw stacked horizontal bars
+        ax.barh(
+            y=0,
+            width=go_pct,
+            color='green',
+            edgecolor='black'
+        )
+
+        ax.barh(
+            y=0,
+            width=stay_pct,
+            left=go_pct,
+            color='red',
+            edgecolor='black'
+        )
+
+        # Add labels inside bars
+        if go_pct > 0:
+            ax.text(
+                go_pct / 2,
+                0,
+                f'GO\n{go_pct:.1f}%',
+                ha='center',
+                va='center',
+                color='white',
+                fontsize=11,
+                fontweight='bold'
+            )
+
+        if stay_pct > 0:
+            ax.text(
+                go_pct + stay_pct / 2,
+                0,
+                f'STAY\n{stay_pct:.1f}%',
+                ha='center',
+                va='center',
+                color='white',
+                fontsize=11,
+                fontweight='bold'
+            )
+
+        # Formatting
+        ax.set_xlim(0, 100)
+        ax.set_yticks([])
+        ax.set_xlabel('Preference (%)')
+        ax.axis('off')
+
+        return ax
 
 
 class Random(CogMod) :

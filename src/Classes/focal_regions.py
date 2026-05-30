@@ -254,7 +254,7 @@ class SetFocalRegions:
                 c: Optional[float] = 0.9,
                 steepness: Optional[float] = 20,
                 max_regions: Optional[int] = 1,
-                from_file: Optional[bool] = True,
+                from_file: Optional[bool] = False,
                 seed: Optional[Union[int, None]] = None
             ) -> None:
         self.num_agents = num_agents

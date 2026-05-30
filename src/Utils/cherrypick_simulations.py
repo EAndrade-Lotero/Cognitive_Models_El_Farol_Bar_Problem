@@ -95,8 +95,8 @@ class CherryPickEquilibria:
         return df
 
     def generate_sober_simulation(self) -> pd.DataFrame:
-        p = self.get_optimal_sober_probability()
-        go_array = (self.rng.random((self.num_agents, self.num_rounds)) < p).astype(int)
+        p = self.get_optimal_sober_probability()        
+        go_array = (self.rng.choice([0, 1], size=(self.num_rounds, self.num_agents), p=[1 - p, p])).astype(int)
         df = self.generate_dataframe(go_array)
         df['p_sober'] = p
         return df
