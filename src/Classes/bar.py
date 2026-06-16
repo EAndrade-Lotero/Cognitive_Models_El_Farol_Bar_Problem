@@ -198,8 +198,10 @@ class Bar :
         num_rounds = df["round"].nunique()
         bar = Bar(num_agents, threshold)
         history = []
+        zero_indexed_rounds = True if min(df["round"].unique()) == 0 else False
+        offset = 0 if zero_indexed_rounds else 1
         for r in range(num_rounds):
-            round_df = df[df["round"] == r + 1]
+            round_df = df[df["round"] == r + offset]
             decisions = round_df["decision"].tolist()
             bar.step(decisions)
         return bar
