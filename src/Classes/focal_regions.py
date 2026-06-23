@@ -31,10 +31,15 @@ class FocalRegion:
         self.category = category
 
     def similarity_score(self, region1: np.ndarray, region2: np.ndarray) -> float:
+        jaccard_score = self.jaccard_similarity_score(region1, region2)
+        # return 0.5 * (1 + jaccard_score)
+        return jaccard_score
+
+    def jaccard_similarity_score(self, region1: np.ndarray, region2: np.ndarray) -> float:
         '''Jaccard similarity score between two regions.'''
         assert region1.shape == region2.shape, f"Regions must have the same shape (but got {region1.shape} and {region2.shape})\n{region1}\n\n{region2}"
         return np.sum(region1 == region2) / np.prod(region1.shape)
-        
+
     def get_region(self, n_cols: int, idx:int) -> np.ndarray:
         if idx + n_cols <= self.focal_region.shape[1]:
             region = self.focal_region[:, idx:idx+n_cols]
@@ -92,7 +97,7 @@ class FocalRegion:
             print('-'*60)
             print(f'Scores: {scores}')
             print(f'Finding preferences for player {agent_id} according to region')
-        action_preferences = np.zeros(2)
+        raw_action_preferences = [[], []]
         num_columns_region = self.focal_region.shape[1]
         len_history = history.shape[1]
         for idx_col in range(num_columns_region):
@@ -105,19 +110,28 @@ class FocalRegion:
                 print(msg)
             # Assign preferences according to similarity score
             raw_preferences = np.zeros(2)
-            raw_preferences[action] = scores[idx_col]
-            raw_preferences[1 - action] = 1 - scores[idx_col]
+            # raw_preferences[action] = scores[idx_col]
+            # raw_preferences[1 - action] = 1 - scores[idx_col]
+            raw_preferences[action] = np.clip(scores[idx_col], 0.5, 1) #### Add this to avoid increasing probability of opposing action due to low similarity
+            raw_preferences[1 - action] = 1 - np.clip(scores[idx_col], 0.5, 1)
             if self.debug:
-                print(f"\tRaw preferences: {raw_preferences}")
-            # Pass through logistic
-            logistic_preferences = self.normalized_logistic(raw_preferences)
-            if self.debug:
-                print(f"\tLogistic preferences: {logistic_preferences}")
-            # Add to action preferences
-            action_preferences += logistic_preferences
+                print(f"\tRaw preferences (sim=0 -> pref=0.5): {raw_preferences}")
+            raw_action_preferences[action].append(raw_preferences[action])
+            raw_action_preferences[1 - action].append(raw_preferences[1 - action])
+        
+        action_preferences = [max(raw_action_preferences[0]), max(raw_action_preferences[1])]
         if self.debug:
-            print(f"Added and normalized preferences: {action_preferences}")
+            print(f"Action preferences: {action_preferences}")
             print('-'*60)
+            # # Pass through logistic
+            # logistic_preferences = self.normalized_logistic(raw_preferences)
+            # if self.debug:
+            #     print(f"\tLogistic preferences: {logistic_preferences}")
+            # # Add to action preferences
+            # action_preferences += logistic_preferences
+        # if self.debug:
+        #     print(f"Added and normalized preferences: {action_preferences}")
+        #     print('-'*60)
         return action_preferences
 
     def get_action_preferences_max(
@@ -396,7 +410,7 @@ class SetFocalRegions:
         for i, region in enumerate(self.focal_regions):
             raw_preferences = region.get_action_preferences(self.history, agent_id)
             # preferences = self.sigmoid(raw_preferences)
-            preferences = self.normalized_logistic(raw_preferences)
+            preferences = self.normalized_logistic(np.array(raw_preferences))
             if self.debug:
                 print(f'Similarities according to region {i}: {raw_preferences}')
                 print(f'\tSigmoid similarities: {preferences}')
