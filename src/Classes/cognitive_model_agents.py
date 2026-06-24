@@ -1998,6 +1998,7 @@ class FocalRegionAgent(CogMod):
             num_agents=self.fixed_parameters['num_agents'],
             threshold=self.fixed_parameters['threshold'],
             len_history=self.free_parameters['len_history'], 
+            from_file=True, ##### <= MODIFY TO CHERRYPICK OR NOT
         )
         self.len_history = free_parameters['len_history']
         if 'max_regions' in free_parameters.keys():
@@ -2025,7 +2026,7 @@ class FocalRegionAgent(CogMod):
 
     @staticmethod
     def name():
-        return 'FRA'
+        return 'Focal Schemata'
     
     @staticmethod
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
@@ -2095,7 +2096,7 @@ class FRAplus(AttendanceM2):
 
     @staticmethod
     def name():
-        return 'FRA+Payoff+Attendance'
+        return 'FS+Payoff+Attendance'
     
     @staticmethod
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
