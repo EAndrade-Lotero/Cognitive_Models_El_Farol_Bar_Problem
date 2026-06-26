@@ -2065,6 +2065,7 @@ class FRAplus(AttendanceM2):
             num_agents=self.fixed_parameters['num_agents'],
             threshold=self.fixed_parameters['threshold'],
             len_history=self.free_parameters['len_history'], 
+            from_file=True, ##### <= MODIFY TO CHERRYPICK OR NOT
         )
         self.len_history = free_parameters['len_history']
         if 'max_regions' in free_parameters.keys():
@@ -2102,8 +2103,9 @@ class FRAplus(AttendanceM2):
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         return {
             'inverse_temperature': (1, 64),
-            'bias': (0, 1),
             'learning_rate': (0, 1),
+            'bias': (0, 1),
+            'forget': (0, 1),
             'len_history': (1, 4),
             'c': (0.5, 1),
             # 'max_regions': (1, 10),
