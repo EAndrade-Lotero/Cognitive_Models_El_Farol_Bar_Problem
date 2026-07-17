@@ -19,3 +19,4 @@
 {"model_name":"MFP-M3","deviance":-20704.280203075,"AIC":41412.5604061499,"free_parameters":{"inverse_temperature":7.7725583528,"belief_strength":14.008406776},"fixed_parameters":{}}
 {"model_name":"FRA","deviance":-21021.7831347377,"AIC":42049.5662694754,"free_parameters":{"inverse_temperature":1.7289257426,"len_history":4.0,"c":0.5},"fixed_parameters":{}}
 {"model_name":"FRA+Payoff+Attendance","deviance":-18804.4576475927,"AIC":37620.9152951854,"free_parameters":{"inverse_temperature":5.7047845439,"bias":0.8298543904,"learning_rate":0.189233471,"len_history":3.74006262,"c":0.5,"delta":0.1627092739},"fixed_parameters":{}}
+{"model_name":"FS+Payoff+Attendance","deviance":-18810.9626417572,"AIC":37635.9252835144,"free_parameters":{"inverse_temperature":6.1945150811,"learning_rate":0.1593764986,"bias":0.8524659755,"forget":0.9882109687,"len_history":1.41727575,"c":0.5767333597,"delta":0.1235204365},"fixed_parameters":{}}

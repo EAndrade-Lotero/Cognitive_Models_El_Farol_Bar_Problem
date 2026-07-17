@@ -4,19 +4,21 @@ import matplotlib.patches as patches
 
 from pathlib import Path
 from typing import (
-    Union, 
-    Optional, 
- )
+    Union,
+    Optional,
+    Dict,
+    Any,
+)
 
 from Utils.utils import PPT
 
 
-class BarRenderer :
+class BarRenderer:
 
     def __init__(
-                self, 
-                data:pd.DataFrame,
-                image_file: Optional[Union[Path, None]]=None
+                self,
+                data: pd.DataFrame,
+                image_file: Optional[Union[Path, None]] = None,
             ) -> None:
         self.data = data
         self.history = self.get_history()
@@ -27,8 +29,10 @@ class BarRenderer :
         self.num_players = data[num_players_column].unique()[0]
         self.image_file = image_file
         # Determine color
-        self.go_color='blue'
-        self.no_go_color='lightgray'
+        self.go_color = 'blue'
+        self.no_go_color = 'lightgray'
+        self.edgecolor = '0.35'
+        self.edge_linewidth = 0.5
         self.dpi = 300
 
     def __str__(self) -> str:
@@ -36,20 +40,22 @@ class BarRenderer :
 
     def render(
                 self,
-                ax: Optional[Union[plt.axis, None]]=None, 
-                title: Optional[Union[str, None]]=None,
-                num_rounds: Optional[int]=30
+                ax: Optional[Union[plt.axis, None]] = None,
+                title: Optional[Union[str, None]] = None,
+                num_rounds: Optional[int] = 30,
+                title_kwargs: Optional[Dict[str, Any]] = None,
             ) -> plt.axis:
         if self.image_file is not None:
             file = PathUtils.add_file_name(
-                path=self.image_file, 
+                path=self.image_file,
                 file_name=f'room{self.room}',
                 extension='png'
             )
         self.render_threshold(
             ax=ax,
-            title=title, 
-            num_rounds=num_rounds
+            title=title,
+            num_rounds=num_rounds,
+            title_kwargs=title_kwargs,
         )
 
     def get_history(self):
@@ -59,10 +65,11 @@ class BarRenderer :
         return history
 
     def render_threshold(
-                self, 
-                ax: Optional[Union[plt.axis, None]]=None,
-                title: Optional[Union[str, None]]=None,
-                num_rounds: Optional[int]=30
+                self,
+                ax: Optional[Union[plt.axis, None]] = None,
+                title: Optional[Union[str, None]] = None,
+                num_rounds: Optional[int] = 30,
+                title_kwargs: Optional[Dict[str, Any]] = None,
             ) -> None:
         '''
         Renders the history of attendances.
@@ -76,12 +83,12 @@ class BarRenderer :
         decisions = [[h[i] for h in history] for i in range(self.num_players)]
         # Create plot
         if ax is None:
-            fig, axes = plt.subplots(figsize=(0.5*num_rounds,0.5*self.num_players))
+            fig, axes = plt.subplots(figsize=(0.5 * num_rounds, 0.5 * self.num_players))
         else:
             axes = ax
         # Determine step sizes
-        step_x = 1/num_rounds
-        step_y = 1/self.num_players
+        step_x = 1 / num_rounds
+        step_y = 1 / self.num_players
         # Draw rectangles (go_color if player goes, gray if player doesnt go)
         tangulos = []
         for r in range(num_rounds):
@@ -95,39 +102,41 @@ class BarRenderer :
                 # Draw filled rectangle
                 tangulos.append(
                     patches.Rectangle(
-                        (r*step_x,p*step_y),step_x,step_y,
-                        facecolor=color
+                        (r * step_x, p * step_y), step_x, step_y,
+                        facecolor=color,
                     )
                 )
         for r in range(len_padding, num_rounds + 1):
             # Draw border
             tangulos.append(
                 patches.Rectangle(
-                    (r*step_x,0),0,1,
-                    edgecolor='black',
+                    (r * step_x, 0), 0, 1,
+                    edgecolor=self.edgecolor,
                     facecolor=self.no_go_color,
-                    linewidth=1
+                    linewidth=self.edge_linewidth,
                 )
             )
         for p in range(self.num_players + 1):
             # Draw border
             tangulos.append(
                 patches.Rectangle(
-                    (len_padding*step_x,p*step_y),1,0,
-                    edgecolor='black',
+                    (len_padding * step_x, p * step_y), 1, 0,
+                    edgecolor=self.edgecolor,
                     facecolor=self.no_go_color,
-                    linewidth=1
+                    linewidth=self.edge_linewidth,
                 )
             )
         for t in tangulos:
             axes.add_patch(t)
         axes.axis('off')
         if title is not None:
-            axes.set_title(title)
+            kwargs = {'fontsize': 9, 'pad': 4}
+            if title_kwargs:
+                kwargs.update(title_kwargs)
+            axes.set_title(title, **kwargs)
         if self.image_file is not None:
             plt.savefig(self.image_file, dpi=self.dpi)
             print(f'Bar attendance saved to file {self.image_file}')
-        else:
+        elif ax is None:
             plt.plot()
         return ax
-        
