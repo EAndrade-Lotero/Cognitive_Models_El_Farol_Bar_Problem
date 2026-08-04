@@ -2065,7 +2065,7 @@ class FRAplus(AttendanceM2):
             num_agents=self.fixed_parameters['num_agents'],
             threshold=self.fixed_parameters['threshold'],
             len_history=self.free_parameters['len_history'], 
-            from_file=True, ##### <= MODIFY TO CHERRYPICK OR NOT
+            from_file=False, ##### <= MODIFY TO CHERRYPICK OR NOT
         )
         self.len_history = free_parameters['len_history']
         if 'max_regions' in free_parameters.keys():
