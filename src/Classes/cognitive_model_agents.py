@@ -263,7 +263,10 @@ class CogMod() :
 
         # Get preferences
         go_pct = self.go_probability() * 100
+        go_pct = round(go_pct, 1)
+
         stay_pct = 100 - go_pct
+        stay_pct = round(stay_pct, 1)
 
         fig, ax = plt.subplots(figsize=(6, 1.5))
 
@@ -314,7 +317,7 @@ class CogMod() :
         ax.set_xlabel('Preference (%)')
         ax.axis('off')
 
-        return ax
+        return fig, ax
 
 
 class Random(CogMod) :
