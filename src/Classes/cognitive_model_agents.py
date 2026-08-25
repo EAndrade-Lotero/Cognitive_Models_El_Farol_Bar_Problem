@@ -1502,7 +1502,7 @@ class AvailableSpaceM3(AttendanceM3) :
         return 'AvailableSpace-M3'
 
 
-class FairnessM1(AttendanceM1) :
+class FairnessM1(PayoffM1) :
     '''
     Defines the error-driven learning rule based 
     on weighted combination of fair amount of go
@@ -1532,6 +1532,8 @@ class FairnessM1(AttendanceM1) :
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.individual_threshold = free_parameters["individual_threshold"]
+        self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
+        self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
 
     def learn(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
@@ -1542,18 +1544,20 @@ class FairnessM1(AttendanceM1) :
         average_go = np.mean(self.decisions + [action])
         # Compare
         # average_fairness = relevant_comparison - average_go
-        average_fairness = FairnessM1.sigmoid(x=average_go, x0=relevant_comparison)
+        # average_fairness = FairnessM1.sigmoid(x=average_go, x0=relevant_comparison)
         # Determine sign depending on action
-        average_fairness = average_fairness * (2 * action - 1)
+        # average_fairness = average_fairness * (2 * action - 1)
+        fairness = max(0, (relevant_comparison - average_go) * self.weight_advantageous_inequality)
+        fairness += max(0, (average_go - relevant_comparison) * self.weight_disadvantageous_inequality)
         # Get payoff
         payoff = self.payoff(action, obs_state)
-        G = self.bias * average_fairness + (1 - self.bias) * payoff
+        G = self.bias * fairness + (1 - self.bias) * payoff
         self.Q[action] = G
         self.Q[1 - action] = 0
         if self.debug:
             print(f"Action taken: {action}")
             print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
-            print(f'Action dependent Average fairness: {average_fairness}')
+            print(f'Action dependent fairness: {fairness}')
             print(f'Payoff: {payoff}')
             print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
             print(f"Preferences from self.Q: {self.Q}")
