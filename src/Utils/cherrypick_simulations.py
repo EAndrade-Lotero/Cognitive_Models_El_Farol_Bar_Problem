@@ -202,7 +202,7 @@ class CherryPickEquilibria:
             else:
                 # Shuffle columns
                 periodic_equilibrium = periodic_equilibrium.T
-                np.random.shuffle(periodic_equilibrium)
+                self.rng.shuffle(periodic_equilibrium)
                 periodic_equilibrium = periodic_equilibrium.T
         return periodic_equilibrium
 
@@ -215,7 +215,7 @@ class CherryPickEquilibria:
             period=period
         )
         if self.allow_shuffle:
-            np.random.shuffle(mixed_equilibrium)
+            self.rng.shuffle(mixed_equilibrium)
         return mixed_equilibrium
 
     def apply_epsilon(self, periodic_equilibrium:np.ndarray) -> np.ndarray:
