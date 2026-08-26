@@ -961,14 +961,10 @@ class PayoffM1(CogMod) :
             - obs_state_, a tuple with the sate of current round,
                         where each argument is 0 or 1.
         '''
-        action = obs_state[self.number]
+        super().update(score, obs_state)
         if self.prev_state_ is not None:
             # Agent learns
             self.learn(obs_state)
-        # Update records
-        self.scores.append(score)
-        self.decisions.append(action)
-        self.prev_state_ = obs_state
 
     def learn(
                 self,
@@ -1228,13 +1224,19 @@ class AttendanceM1(PayoffM1) :
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
         self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
+
+    def restart(self) -> None:
+        super().restart()
+        self.average_go = 0.0
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
-        # Get go frequency
-        # average_go = np.mean(self.decisions + [action])
-        average_go = np.mean(self.decisions) * (1 - self.forget) + action * self.forget
-        # Get payoff
+        average_go = self._update_average_go(action)
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_go + (1 - self.bias) * payoff
         if self.debug:
@@ -1290,13 +1292,19 @@ class AttendanceM2(PayoffM2) :
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
         self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
+
+    def restart(self) -> None:
+        super().restart()
+        self.average_go = 0.0
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
-        # Get go frequency
-        # average_go = np.mean(self.decisions + [action])
-        average_go = np.mean(self.decisions) * self.forget + action * (1 - self.forget)
-        # Get payoff
+        average_go = self._update_average_go(action)
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_go + (1 - self.bias) * payoff
         if self.debug:
@@ -1349,13 +1357,19 @@ class AttendanceM3(PayoffM3) :
         super().ingest_parameters(fixed_parameters, free_parameters)
         self.bias = free_parameters['bias']
         self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
+
+    def restart(self) -> None:
+        super().restart()
+        self.average_go = 0.0
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         action = obs_state[self.number]
-        # Get go frequency
-        # average_go = np.mean(self.decisions + [action])
-        average_go = np.mean(self.decisions) * self.forget + action * (1 - self.forget)
-        # Get payoff
+        average_go = self._update_average_go(action)
         payoff = self.payoff(action, obs_state)
         G = self.bias * average_go + (1 - self.bias) * payoff
         if self.debug:
@@ -1502,7 +1516,7 @@ class AvailableSpaceM3(AttendanceM3) :
         return 'AvailableSpace-M3'
 
 
-class FairnessM1(PayoffM1) :
+class FairnessM1(AttendanceM1) :
     '''
     Defines the error-driven learning rule based 
     on weighted combination of fair amount of go
@@ -1531,36 +1545,41 @@ class FairnessM1(PayoffM1) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.individual_threshold = free_parameters["individual_threshold"]
+        self.individual_threshold = fixed_parameters["threshold"]
         self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
         self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
 
-    def learn(self, obs_state: Tuple[int]) -> float:
-        action = obs_state[self.number]
-        # Comparison is set to the individual threshold
+    def _get_G(self, obs_state: Tuple[int]) -> float:
         relevant_comparison = self.individual_threshold
-        # Get average go using forgetting
-        # average_go = np.mean(self.decisions) * (1 - self.forget) + action * self.forget
-        average_go = np.mean(self.decisions + [action])
-        # Compare
-        # average_fairness = relevant_comparison - average_go
-        # average_fairness = FairnessM1.sigmoid(x=average_go, x0=relevant_comparison)
-        # Determine sign depending on action
-        # average_fairness = average_fairness * (2 * action - 1)
-        fairness = max(0, (relevant_comparison - average_go) * self.weight_advantageous_inequality)
-        fairness += max(0, (average_go - relevant_comparison) * self.weight_disadvantageous_inequality)
+        # prev_advantageous_inequality = max(0, self.average_go - relevant_comparison)
+        # prev_disadvantageous_inequality = max(0, relevant_comparison - self.average_go)
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        new_advantageous_inequality = max(0, average_go - relevant_comparison)
+        new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
+        # change_advantageous_inequality = new_advantageous_inequality - prev_advantageous_inequality
+        # change_disadvantageous_inequality = new_disadvantageous_inequality - prev_disadvantageous_inequality
+        # if action == 0:
+        #     fairness = -self.weight_advantageous_inequality * change_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        # else:
+        #     fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * change_disadvantageous_inequality
+        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * fairness + (1 - self.bias) * payoff
-        self.Q[action] = G
-        self.Q[1 - action] = 0
         if self.debug:
             print(f"Action taken: {action}")
             print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
+            # print(f'Previous advantageous inequality: {prev_advantageous_inequality}')
+            # print(f'Previous disadvantageous inequality: {prev_disadvantageous_inequality}')
+            print(f'New advantageous inequality: {new_advantageous_inequality}')
+            print(f'New disadvantageous inequality: {new_disadvantageous_inequality}')
+            # print(f'Change advantageous inequality: {change_advantageous_inequality}')
+            # print(f'Change disadvantageous inequality: {change_disadvantageous_inequality}')
             print(f'Action dependent fairness: {fairness}')
             print(f'Payoff: {payoff}')
             print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
-            print(f"Preferences from self.Q: {self.Q}")
+        return G
 
     @staticmethod
     def sigmoid(x, x0=0, k=20):
@@ -1577,7 +1596,8 @@ class FairnessM1(PayoffM1) :
         bounds.update({
             'bias': (0, 1),
             'forget': (0, 1),
-            'individual_threshold': (0, 1),
+            'weight_advantageous_inequality': (0, 1),
+            'weight_disadvantageous_inequality': (0, 5),
         })
         return bounds
 
@@ -1612,9 +1632,11 @@ class FairnessM2(AttendanceM2) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.individual_threshold = free_parameters["individual_threshold"]
+        self.individual_threshold = fixed_parameters["individual_threshold"]
+        self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
+        self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
 
-    def learn(
+    def _get_G(
                 self,
                 obs_state: Tuple[int],
             ) -> None:
@@ -1626,20 +1648,37 @@ class FairnessM2(AttendanceM2) :
         # Get previous state
         previous_state = self.prev_state_
         prev_action, attendance = self._get_index(previous_state)
-        # Get action
         action = obs_state[self.number]
-        # Get go frequency
+        average_go = self._update_average_go(action)
         relevant_comparison = self.individual_threshold
-        average_go = np.mean(self.decisions) * self.forget + action * (1 - self.forget)
-        average_fairness = relevant_comparison - average_go
-        average_fairness = average_fairness * (2 * action - 1)
+        # prev_advantageous_inequality = max(0, self.average_go - relevant_comparison)
+        # prev_disadvantageous_inequality = max(0, relevant_comparison - self.average_go)
+        new_advantageous_inequality = max(0, average_go - relevant_comparison)
+        new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
+        # change_advantageous_inequality = new_advantageous_inequality - prev_advantageous_inequality
+        # change_disadvantageous_inequality = new_disadvantageous_inequality - prev_disadvantageous_inequality
+        # if action == 0:
+        #     fairness = -self.weight_advantageous_inequality * change_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        # else:
+        #     fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * change_disadvantageous_inequality
+        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
         # Get payoff
         payoff = self.payoff(action, obs_state)
-        G = self.bias * average_fairness + (1 - self.bias) * payoff
-        self.Q[prev_action, attendance, action] = G
-        self.Q[prev_action, attendance, 1 - action] = 0
+        G = self.bias * fairness + (1 - self.bias) * payoff
         if self.debug:
-            print(f'Q[({prev_action}, {attendance}), {action}] = {self.Q[prev_action, attendance, action]}')
+            print(f"Action taken: {action}")
+            print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
+            # print(f'Q[({prev_action}, {attendance}), {action}] = {self.Q[prev_action, attendance, action]}')
+            # print(f'Previous advantageous inequality: {prev_advantageous_inequality}')
+            # print(f'Previous disadvantageous inequality: {prev_disadvantageous_inequality}')
+            print(f'New advantageous inequality: {new_advantageous_inequality}')
+            print(f'New disadvantageous inequality: {new_disadvantageous_inequality}')
+            # print(f'Change advantageous inequality: {change_advantageous_inequality}')
+            # print(f'Change disadvantageous inequality: {change_disadvantageous_inequality}')
+            print(f'Action dependent fairness: {fairness}')
+            print(f'Payoff: {payoff}')
+            print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
+        return G
 
     @staticmethod
     def name():
@@ -1651,7 +1690,8 @@ class FairnessM2(AttendanceM2) :
         bounds.update({
             'bias': (0, 1),
             'forget': (0, 1),
-            'individual_threshold': (0, 1),
+            'weight_advantageous_inequality': (0, 1),
+            'weight_disadvantageous_inequality': (0, 5),
         })
         return bounds
     
@@ -1685,19 +1725,40 @@ class FairnessM3(AttendanceM3) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.individual_threshold = free_parameters["individual_threshold"]
+        self.individual_threshold = fixed_parameters["individual_threshold"]
+        self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
+        self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
-        action = obs_state[self.number]
-        # Get go frequency
+        # Get previous state
         relevant_comparison = self.individual_threshold
-        average_fairness = relevant_comparison - np.mean(self.decisions + [action])
-        average_fairness = average_fairness * (2 * action - 1)
+        # prev_advantageous_inequality = max(0, self.average_go - relevant_comparison)
+        # prev_disadvantageous_inequality = max(0, relevant_comparison - self.average_go)
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        new_advantageous_inequality = max(0, average_go - relevant_comparison)
+        new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
+        # change_advantageous_inequality = new_advantageous_inequality - prev_advantageous_inequality
+        # change_disadvantageous_inequality = new_disadvantageous_inequality - prev_disadvantageous_inequality
+        # if action == 0:
+        #     fairness = -self.weight_advantageous_inequality * change_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        # else:
+        #     fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * change_disadvantageous_inequality
+        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
         # Get payoff
         payoff = self.payoff(action, obs_state)
-        G = self.bias * average_fairness + (1 - self.bias) * payoff
+        G = self.bias * fairness + (1 - self.bias) * payoff
         if self.debug:
-            print(f'Average fairness: {average_fairness}')
+            print(f"Action taken: {action}")
+            print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
+            # print(f'Q[({prev_action}, {attendance}), {action}] = {self.Q[prev_action, attendance, action]}')
+            # print(f'Previous advantageous inequality: {prev_advantageous_inequality}')
+            # print(f'Previous disadvantageous inequality: {prev_disadvantageous_inequality}')
+            print(f'New advantageous inequality: {new_advantageous_inequality}')
+            print(f'New disadvantageous inequality: {new_disadvantageous_inequality}')
+            # print(f'Change advantageous inequality: {change_advantageous_inequality}')
+            # print(f'Change disadvantageous inequality: {change_disadvantageous_inequality}')
+            print(f'Action dependent fairness: {fairness}')
             print(f'Payoff: {payoff}')
             print(f'G observed for action {action} in state {self.prev_state_} is: {G}')
         return G
@@ -1708,7 +1769,8 @@ class FairnessM3(AttendanceM3) :
         bounds.update({
             'bias': (0, 1),
             'forget': (0, 1),
-            'individual_threshold': (0, 1),
+            'weight_advantageous_inequality': (0, 1),
+            'weight_disadvantageous_inequality': (0, 5),
         })
         return bounds
 

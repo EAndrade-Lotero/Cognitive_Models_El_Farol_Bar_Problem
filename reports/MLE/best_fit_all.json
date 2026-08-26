@@ -5,13 +5,13 @@
 {"model_name":"Payoff-M1","deviance":-21531.9519685331,"AIC":43067.9039370661,"free_parameters":{"inverse_temperature":2.2524484319,"learning_rate":0.0262109869},"fixed_parameters":{}}
 {"model_name":"Payoff-M2","deviance":-21049.810865509,"AIC":42103.621731018,"free_parameters":{"inverse_temperature":6.3577853163,"learning_rate":0.0390547832},"fixed_parameters":{}}
 {"model_name":"Payoff-M3","deviance":-21131.0599639413,"AIC":42266.1199278825,"free_parameters":{"inverse_temperature":5.94442705,"learning_rate":0.0500317899},"fixed_parameters":{}}
-{"model_name":"Attendance-M1","deviance":-19915.7922093435,"AIC":39837.5844186869,"free_parameters":{"inverse_temperature":3.372647108,"learning_rate":0.1244192185,"bias":0.8393996617},"fixed_parameters":{}}
+{"model_name":"Attendance-M1","deviance":-19923.5849345692,"AIC":39855.1698691383,"free_parameters":{"inverse_temperature":12.6863095526,"learning_rate":0.3537668311,"bias":0.9737078122,"forget":0.9836933667},"fixed_parameters":{}}
 {"model_name":"Attendance-M2","deviance":-18979.5416259116,"AIC":37965.0832518231,"free_parameters":{"inverse_temperature":5.3035335618,"learning_rate":0.1818562875,"bias":0.8156616184},"fixed_parameters":{}}
 {"model_name":"Attendance-M3","deviance":-19641.4192447254,"AIC":39288.8384894508,"free_parameters":{"inverse_temperature":6.1242243984,"learning_rate":0.1877021598,"bias":0.7845314868},"fixed_parameters":{}}
 {"model_name":"AvailableSpace-M1","deviance":-21606.8126233148,"AIC":43219.6252466296,"free_parameters":{"inverse_temperature":62.708638945,"learning_rate":0.0005057007,"bias":0.5833993308},"fixed_parameters":{}}
 {"model_name":"AvailableSpace-M2","deviance":-20800.2011850519,"AIC":41606.4023701037,"free_parameters":{"inverse_temperature":64.0,"learning_rate":0.0030587637,"bias":0.2246768681},"fixed_parameters":{}}
 {"model_name":"AvailableSpace-M3","deviance":-20765.8103549497,"AIC":41537.6207098994,"free_parameters":{"inverse_temperature":64.0,"learning_rate":0.0048077387,"bias":0.5608067767},"fixed_parameters":{}}
-{"model_name":"Fairness-M1","deviance":-21481.4763047018,"AIC":42968.9526094035,"free_parameters":{"inverse_temperature":5.1727741561,"learning_rate":0.0146442014,"bias":0.0},"fixed_parameters":{}}
+{"model_name":"Fairness-M1","deviance":-21452.9641395504,"AIC":42917.9282791008,"free_parameters":{"inverse_temperature":6.4654108679,"learning_rate":0.011929783,"bias":0.0515608068,"forget":1.0,"weight_advantageous_inequality":1.0,"weight_disadvantageous_inequality":0.0},"fixed_parameters":{}}
 {"model_name":"Fairness-M2","deviance":-21043.2976540151,"AIC":42092.5953080302,"free_parameters":{"inverse_temperature":64.0,"learning_rate":0.0034143499,"bias":0.0},"fixed_parameters":{}}
 {"model_name":"Fairness-M3","deviance":-21306.688259232,"AIC":42619.3765184639,"free_parameters":{"inverse_temperature":3.8067683483,"learning_rate":0.1074941291,"bias":0.2257093386},"fixed_parameters":{}}
 {"model_name":"MFP-M1","deviance":-21271.9103959371,"AIC":42547.8207918742,"free_parameters":{"inverse_temperature":1.3008644171,"belief_strength":2.3721238259},"fixed_parameters":{}}
