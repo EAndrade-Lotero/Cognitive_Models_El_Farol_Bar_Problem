@@ -183,22 +183,12 @@ class CherryPickEquilibria:
             print(f'Equilibrium of {self.B} agents:\n{go_agents}')
         return go_agents
 
-    def random_periodic_equilibrium(self, period:int) -> np.ndarray:
-        period = int(period)
-        assert(period <= self.num_agents)
-        one_shot_equilibria = list(permutations(self.agents, r=self.B))
-        periodic_equilibrium = self.rng.choice(one_shot_equilibria, size=period, replace=True)
-        if self.debug:
-            for k, agents in enumerate(periodic_equilibrium):
-                print(f'On round {k} agents that go are {agents}')
-        return periodic_equilibrium
-
     def random_fair_periodic_equilibrium(self, period:int) -> np.ndarray:
         periodic_equilibrium = self.get_fair_periodic_equilibrium(period)
         if self.allow_shuffle:
             if self.rng.random() < 0.8:
                 # Shuffle rows
-                np.random.shuffle(periodic_equilibrium)
+                self.rng.shuffle(periodic_equilibrium)
             else:
                 # Shuffle columns
                 periodic_equilibrium = periodic_equilibrium.T

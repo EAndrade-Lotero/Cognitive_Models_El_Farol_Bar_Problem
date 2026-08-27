@@ -105,6 +105,7 @@ class FocalRegion:
             next_idx_col = (idx_col + len_history) % num_columns_region
             # Find action according to pattern at next column idx
             action = int(self.focal_region[agent_id, next_idx_col])
+            assert action in [0, 1], f"Action should be 0 or 1, not {action}\n{self.focal_region}"
             if self.debug:
                 msg = f"Pattern at column {idx_col} assigns similarity {scores[idx_col]} to action={'go' if action == 1 else 'no-go'}"
                 print(msg)
