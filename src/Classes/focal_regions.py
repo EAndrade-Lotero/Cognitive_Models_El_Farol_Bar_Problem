@@ -340,11 +340,12 @@ class SetFocalRegions:
             self.save_focal_regions()
 
     def load_focal_regions(self) -> List[FocalRegion]:
-        '''Loads focal regions from file.'''
+        '''Loads up to self.max_regions from the file for this
+        num_agents and threshold, balanced across categories.'''
         if not self.file.exists():
             raise FileNotFoundError(f"Focal regions file {self.file} does not exist.")
         data = json.load(open(self.file, 'r'))
-        regions = []
+        regions_by_category = {}
         for region_dict in data:
             region = np.array(region_dict['region'])
             category = region_dict.get('category')
@@ -354,8 +355,16 @@ class SetFocalRegions:
                 c=self.c,
                 steepness=self.steepness
             )
-            regions.append(region_)
-        return regions
+            regions_by_category.setdefault(category, []).append(region_)
+        # Match generation order: fair/alternation, segmented, mixed
+        preferred_order = ['fair', 'alternation', 'segmented', 'mixed']
+        list_regions = []
+        for category in preferred_order:
+            if category in regions_by_category:
+                list_regions.append(regions_by_category.pop(category))
+        for remaining in regions_by_category.values():
+            list_regions.append(remaining)
+        return self.equal_region_sizes(list_regions)
 
     def save_focal_regions(self) -> None:
         '''Saves focal regions to file.'''
