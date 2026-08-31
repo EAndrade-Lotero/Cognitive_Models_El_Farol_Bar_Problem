@@ -171,7 +171,7 @@ class FocalRegion:
         # Get number of rounds and agents
         num_rounds = region.shape[1]
         num_agents = region.shape[0]
-        region = np.flipud(region)
+        # region = np.flipud(region)
         len_padding = 0
         # Create plot
         if axes is None:
