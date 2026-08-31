@@ -1632,7 +1632,7 @@ class FairnessM2(AttendanceM2) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.individual_threshold = fixed_parameters["individual_threshold"]
+        self.individual_threshold = fixed_parameters["threshold"]
         self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
         self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
 
@@ -1725,26 +1725,19 @@ class FairnessM3(AttendanceM3) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.individual_threshold = fixed_parameters["individual_threshold"]
+        self.individual_threshold = fixed_parameters["threshold"]
         self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
         self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
 
     def _get_G(self, obs_state: Tuple[int]) -> float:
         # Get previous state
         relevant_comparison = self.individual_threshold
-        # prev_advantageous_inequality = max(0, self.average_go - relevant_comparison)
-        # prev_disadvantageous_inequality = max(0, relevant_comparison - self.average_go)
         action = obs_state[self.number]
         average_go = self._update_average_go(action)
         new_advantageous_inequality = max(0, average_go - relevant_comparison)
         new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
-        # change_advantageous_inequality = new_advantageous_inequality - prev_advantageous_inequality
-        # change_disadvantageous_inequality = new_disadvantageous_inequality - prev_disadvantageous_inequality
-        # if action == 0:
-        #     fairness = -self.weight_advantageous_inequality * change_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
-        # else:
-        #     fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * change_disadvantageous_inequality
-        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality 
+        fariness -= self.weight_disadvantageous_inequality * new_disadvantageous_inequality
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * fairness + (1 - self.bias) * payoff
