@@ -20,3 +20,4 @@
 {"model_name":"FRA","deviance":-21021.7831347377,"AIC":42049.5662694754,"free_parameters":{"inverse_temperature":1.7289257426,"len_history":4.0,"c":0.5},"fixed_parameters":{}}
 {"model_name":"FRA+Payoff+Attendance","deviance":-18804.4576475927,"AIC":37620.9152951854,"free_parameters":{"inverse_temperature":5.7047845439,"bias":0.8298543904,"learning_rate":0.189233471,"len_history":3.74006262,"c":0.5,"delta":0.1627092739},"fixed_parameters":{}}
 {"model_name":"FS+Payoff+Attendance","deviance":-21396.4669779694,"AIC":42806.9339559388,"free_parameters":{"inverse_temperature":1.0,"learning_rate":1.0,"bias":1.0,"forget":0.0,"len_history":2.0944322301,"c":0.5,"delta":0.2},"fixed_parameters":{}}
+{"model_name":"ICSM","deviance":-21095.1152370613,"AIC":42196.2304741227,"free_parameters":{"inverse_temperature":2.3560627323,"len_history":3.8439106337,"c":0.9135577356},"fixed_parameters":{}}

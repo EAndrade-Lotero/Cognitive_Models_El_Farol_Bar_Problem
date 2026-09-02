@@ -1392,6 +1392,151 @@ class AttendanceM3(PayoffM3) :
         return bounds
 
 
+class OnlyAttendanceM1(AttendanceM1) :
+    '''
+    Defines the error-driven learning rule based on 
+    attendance only.
+    This is the unconditioned model.
+    '''
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.bias = 1
+        self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    @staticmethod
+    def name():
+        return 'OnlyAttendance-M1'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM1.bounds(fixed_parameters)
+        bounds.update({
+            'forget': (0, 1)
+        })
+        return bounds
+
+
+class OnlyAttendanceM2(AttendanceM2) :
+    '''
+    Defines the error-driven learning rule based on 
+    attendance only.
+    This model conditions G on the previous action 
+    and aggregate state.
+    '''
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.bias = 1
+        self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    @staticmethod
+    def name():
+        return 'OnlyAttendance-M2'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM2.bounds(fixed_parameters)
+        bounds.update({
+            'forget': (0, 1)
+        })
+        return bounds
+
+
+class OnlyAttendanceM3(AttendanceM3) :
+    '''
+    Defines the error-driven learning rule based on 
+    attendance only.
+    This model conditions G on the previous actions vector, the full-state.
+    '''
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.bias = 1
+        self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    @staticmethod
+    def name():
+        return 'OnlyAttendance-M3'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM3.bounds(fixed_parameters)
+        bounds.update({
+            'forget': (0, 1)
+        })
+        return bounds
+
+
 class AvailableSpaceM1(AttendanceM1) :
     '''
     Defines the error-driven learning rule based on 
@@ -1770,6 +1915,153 @@ class FairnessM3(AttendanceM3) :
     @staticmethod
     def name():
         return 'Fairness-M3'
+
+
+class OnlyFairnessM1(FairnessM1) :
+    '''
+    Defines the error-driven learning rule based on 
+    fairness only.
+    This model conditions G on the previous action 
+    and aggregate state.
+    '''
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.bias = 1
+        self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    @staticmethod
+    def name():
+        return 'OnlyFairness-M1'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM1.bounds(fixed_parameters)
+        bounds.update({
+            'forget': (0, 1)
+        })
+        return bounds
+
+
+class OnlyFairnessM2(FairnessM2) :
+    '''
+    Defines the error-driven learning rule based on 
+    attendance only.
+    This model conditions G on the previous action 
+    and aggregate state.
+    '''
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.bias = 1
+        self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    @staticmethod
+    def name():
+        return 'OnlyFairness-M2'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM2.bounds(fixed_parameters)
+        bounds.update({
+            'forget': (0, 1)
+        })
+        return bounds
+
+
+class OnlyFairnessM3(FairnessM3) :
+    '''
+    Defines the error-driven learning rule based on 
+    fairness only.
+    This model conditions G on the previous actions vector, the full-state.
+    and aggregate state.
+    '''
+    def __init__(
+                self, 
+                free_parameters:Optional[Dict[str, Any]]={}, 
+                fixed_parameters:Optional[Dict[str, Any]]={}, 
+                n:Optional[int]=1
+            ) -> None:
+        #----------------------
+        # Initialize superclass
+        #----------------------
+        super().__init__(
+            free_parameters=free_parameters, 
+            fixed_parameters=fixed_parameters, 
+            n=n
+        )
+        #----------------------
+        # Bookkeeping for model parameters
+        #----------------------
+        self.ingest_parameters(fixed_parameters, free_parameters)
+
+    def ingest_parameters(
+                self, 
+                fixed_parameters:Dict[str, Any], 
+                free_parameters:Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        self.bias = 1
+        self.forget = free_parameters['forget']
+        self.average_go = 0.0
+
+    @staticmethod
+    def name():
+        return 'OnlyFairness-M3'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM3.bounds(fixed_parameters)
+        bounds.update({
+            'forget': (0, 1)
+        })
+        return bounds
 
 
 class MFPM1(CogMod) :

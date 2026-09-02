@@ -278,6 +278,7 @@ class SetFocalRegions:
                 steepness: Optional[float] = 20,
                 max_regions: Optional[int] = 1,
                 from_file: Optional[bool] = False,
+                add_empirical_focal_regions: Optional[bool] = True,
                 seed: Optional[Union[int, None]] = None
             ) -> None:
         self.num_agents = num_agents
@@ -287,6 +288,7 @@ class SetFocalRegions:
         self.c = c
         self.steepness = steepness
         self.focal_regions = []
+        self.add_empirical_focal_regions = add_empirical_focal_regions
         self.max_regions = min(int(max_regions), num_agents*2)
         self.history = None
         self.debug = False
@@ -311,6 +313,7 @@ class SetFocalRegions:
         file = f'_{self.num_agents}_agents'
         file += f'_{self.threshold}_threshold.json'
         self.file = PATHS['focal_regions_path'] / file
+        self.file_empirical = PATHS['empirical_focal_regions_path'] / file
 
     def add_history(self, obs: List[int]) -> None:
         obs_array = np.array(obs).reshape(-1, 1)
@@ -334,25 +337,16 @@ class SetFocalRegions:
         fair_regions = self.generate_fair_regions()
         segmented_regions = self.generate_segmented_regions()
         mixed_regions = self.generate_mixed_regions()
-        if self.debug:
-            print('Equalizing region sizes')
-        regions = self.equal_region_sizes([
-            fair_regions, 
-            segmented_regions, 
-            mixed_regions
+        self.focal_regions = self.equal_region_sizes([
+            self.unique_regions(fair_regions),
+            self.unique_regions(segmented_regions),
+            self.unique_regions(mixed_regions),
         ])
-        self.focal_regions = regions
-        # if self.from_file:
-        #     if self.debug:
-        #         print(f'Saving focal regions to {self.file}')
-        #     self.save_focal_regions()
+        if self.debug:
+            print(f'Generated {len(self.focal_regions)} focal regions')
 
-    def load_focal_regions(self) -> List[FocalRegion]:
-        '''Loads up to self.max_regions from the file for this
-        num_agents and threshold, balanced across categories.'''
-        if not self.file.exists():
-            raise FileNotFoundError(f"Focal regions file {self.file} does not exist.")
-        data = json.load(open(self.file, 'r'))
+    def load_focal_regions_from_file(self, file: Path) -> List[FocalRegion]:
+        data = json.load(open(file, 'r'))
         regions_by_category = {}
         for region_dict in data:
             region = np.array(region_dict['region'])
@@ -364,6 +358,27 @@ class SetFocalRegions:
                 steepness=self.steepness
             )
             regions_by_category.setdefault(category, []).append(region_)
+        return regions_by_category
+
+    def load_empirical_focal_regions(self) -> List[FocalRegion]:
+        '''Generates empirical focal regions.'''
+        if not self.file_empirical.exists():
+            raise FileNotFoundError(f"Empirical focal regions file {self.file_empirical} does not exist.")
+        return self.load_focal_regions_from_file(self.file_empirical)
+
+    def load_focal_regions(self) -> List[FocalRegion]:
+        '''Loads up to self.max_regions from the file for this
+        num_agents and threshold, balanced across categories.'''
+        if not self.file.exists():
+            raise FileNotFoundError(f"Focal regions file {self.file} does not exist.")
+        regions_by_category = self.load_focal_regions_from_file(self.file)
+        if self.add_empirical_focal_regions:
+            empirical_regions = self.load_empirical_focal_regions()
+            for category, regions in empirical_regions.items():
+                if category in regions_by_category:
+                    regions_by_category[category].insert(0, regions[0])
+                else:
+                    regions_by_category[category] = [regions[0]]
         # Match generation order: fair/alternation, segmented, mixed
         preferred_order = ['fair', 'alternation', 'segmented', 'mixed']
         list_regions = []
@@ -372,6 +387,7 @@ class SetFocalRegions:
                 list_regions.append(regions_by_category.pop(category))
         for remaining in regions_by_category.values():
             list_regions.append(remaining)
+        list_regions = [self.unique_regions(regions) for regions in list_regions]
         return self.equal_region_sizes(list_regions)
 
     def save_focal_regions(self) -> None:
@@ -494,30 +510,71 @@ class SetFocalRegions:
         # shift and scale so that f(0)==0 and f(1)==1
         return (raw - raw0) / (raw1 - raw0)
 
+    @staticmethod
+    def region_key(region: FocalRegion) -> bytes:
+        '''Canonical key of a region, so that column cycles map to the same value.'''
+        arr = np.ascontiguousarray(region.focal_region)
+        return min(
+            np.ascontiguousarray(np.roll(arr, -shift, axis=1)).tobytes()
+            for shift in range(arr.shape[1])
+        )
+
+    @classmethod
+    def unique_regions(cls, regions: List[FocalRegion]) -> List[FocalRegion]:
+        '''Keep the first copy of each region, treating column cycles as the same.'''
+        seen = set()
+        unique = []
+        for region in regions:
+            key = cls.region_key(region)
+            if key not in seen:
+                seen.add(key)
+                unique.append(region)
+        return unique
+
+    @classmethod
+    def unique_regions_by_category(
+                cls,
+                list_regions: List[List[FocalRegion]]
+            ) -> List[List[FocalRegion]]:
+        '''Drop repeated regions, both inside each category and across categories.'''
+        seen = set()
+        deduplicated = []
+        for regions in list_regions:
+            kept = []
+            for region in regions:
+                key = cls.region_key(region)
+                if key not in seen:
+                    seen.add(key)
+                    kept.append(region)
+            deduplicated.append(kept)
+        return deduplicated
+
     def equal_region_sizes(self, list_regions: List[List[FocalRegion]]) -> List[List[FocalRegion]]:
-        '''Making sure all regions have the same length'''
-        #----------------------------------------
-        # Finding lengths of each type of region
-        #----------------------------------------
+        '''Takes up to self.max_regions regions, balanced across categories.'''
+        list_regions = self.unique_regions_by_category(list_regions)
         lengths = [len(regions) for regions in list_regions]
-        non_zero_lengths = [l for l in lengths if l > 0]
-        m = len(non_zero_lengths)
-        n = self.max_regions // m
-        res = self.max_regions % m
-        target_lengths = [n if l > 0 else 0 for l in lengths]
-        first_non_zero_idx = next((i for i, l in enumerate(lengths) if l > 0), None)
-        if first_non_zero_idx is not None:
-            target_lengths[first_non_zero_idx] += res
         #----------------------------------------
-        # Equalizing
+        # Hand out slots in equal shares, giving unused
+        # ones back to the categories that can still fill them
         #----------------------------------------
-        for i, regions in enumerate(list_regions):
-            if len(regions) > target_lengths[i]:
-                list_regions[i] = regions[:target_lengths[i]]
-            elif 0 < len(regions) < target_lengths[i]:
-                idx_regions = [i % len(regions) for i in range(target_lengths[i])]
-                list_regions[i] = [regions[i] for i in idx_regions]
-        return [region for sublist in list_regions for region in sublist]
+        target_lengths = [0] * len(lengths)
+        remaining = self.max_regions
+        while remaining > 0:
+            candidates = [i for i, l in enumerate(lengths) if target_lengths[i] < l]
+            if not candidates:
+                break
+            share = max(1, remaining // len(candidates))
+            for i in candidates:
+                if remaining == 0:
+                    break
+                taken = min(share, lengths[i] - target_lengths[i], remaining)
+                target_lengths[i] += taken
+                remaining -= taken
+        return [
+            region
+            for i, regions in enumerate(list_regions)
+            for region in regions[:target_lengths[i]]
+        ]
 
     def __str__(self):
         cadena = ''
