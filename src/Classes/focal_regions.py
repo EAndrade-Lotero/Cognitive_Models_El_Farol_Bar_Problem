@@ -24,6 +24,7 @@ class FocalRegion:
             ) -> None:
         assert(isinstance(focal_region, np.ndarray)), f"Error: region should be an np.ndarray, not {type(focal_region)}"
         self.focal_region = focal_region
+        # self.focal_region = np.flipud(focal_region)
         self.c = c
         self.steepness = steepness
         self.debug = False
@@ -95,7 +96,7 @@ class FocalRegion:
         scores = self.get_similarity_scores(history)
         if self.debug:
             print('-'*60)
-            print(f'Scores: {scores}')
+            print(f'Scores: {[f"{round(score, 2)}" for score in scores]}')
             print(f'Finding preferences for player {agent_id} according to region')
         raw_action_preferences = [[], []]
         num_columns_region = self.focal_region.shape[1]
@@ -110,19 +111,26 @@ class FocalRegion:
                 msg = f"Pattern at column {idx_col} assigns similarity {scores[idx_col]} to action={'go' if action == 1 else 'no-go'}"
                 print(msg)
             # Assign preferences according to similarity score
-            raw_preferences = np.zeros(2)
-            # raw_preferences[action] = scores[idx_col]
-            # raw_preferences[1 - action] = 1 - scores[idx_col]
-            raw_preferences[action] = np.clip(scores[idx_col], 0.5, 1) #### Add this to avoid increasing probability of opposing action due to low similarity
-            raw_preferences[1 - action] = 1 - np.clip(scores[idx_col], 0.5, 1)
-            if self.debug:
-                print(f"\tRaw preferences (sim=0 -> pref=0.5): {raw_preferences}")
-            raw_action_preferences[action].append(raw_preferences[action])
-            raw_action_preferences[1 - action].append(raw_preferences[1 - action])
+
+            action_preference = scores[idx_col]
+            raw_action_preferences[action].append(action_preference)
+            raw_action_preferences[1 - action].append(0)
+
+            # raw_preferences = np.zeros(2)
+            # # raw_preferences[action] = scores[idx_col]
+            # # raw_preferences[1 - action] = 1 - scores[idx_col]
+            # raw_preferences[action] = np.clip(scores[idx_col], 0.5, 1) #### Add this to avoid increasing probability of opposing action due to low similarity
+            # raw_preferences[1 - action] = 0
+            # # raw_preferences[1 - action] = 1 - np.clip(scores[idx_col], 0.5, 1)
+            # raw_action_preferences[action].append(raw_preferences[action])
+            # raw_action_preferences[1 - action].append(raw_preferences[1 - action])
+            # if self.debug:
+            #     print(f"\tRaw preferences: {raw_action_preferences}")
         
+        # action_preferences = [sum(raw_action_preferences[0]), sum(raw_action_preferences[1])]
         action_preferences = [max(raw_action_preferences[0]), max(raw_action_preferences[1])]
         if self.debug:
-            print(f"Action preferences: {action_preferences}")
+            print(f"Action preferences: {[f"{round(score, 2)}" for score in action_preferences]}")
             print('-'*60)
             # # Pass through logistic
             # logistic_preferences = self.normalized_logistic(raw_preferences)
@@ -171,7 +179,7 @@ class FocalRegion:
         # Get number of rounds and agents
         num_rounds = region.shape[1]
         num_agents = region.shape[0]
-        # region = np.flipud(region)
+        region = np.flipud(region)
         len_padding = 0
         # Create plot
         if axes is None:
@@ -334,10 +342,10 @@ class SetFocalRegions:
             mixed_regions
         ])
         self.focal_regions = regions
-        if self.from_file:
-            if self.debug:
-                print(f'Saving focal regions to {self.file}')
-            self.save_focal_regions()
+        # if self.from_file:
+        #     if self.debug:
+        #         print(f'Saving focal regions to {self.file}')
+        #     self.save_focal_regions()
 
     def load_focal_regions(self) -> List[FocalRegion]:
         '''Loads up to self.max_regions from the file for this
@@ -415,25 +423,48 @@ class SetFocalRegions:
         if self.debug:
             print('='*60)
             print(f"Considering preferences from the viewpoint of agent {agent_id}")
+            print('='*60)
+            print('')
             print('-'*60)
-        action_preferences = np.zeros(2)
+            print(f'History:')
+            print(self.history)
+            print('-'*60)
+        # action_preferences = np.zeros(2)
+        action_preferences = np.ones(2) * (-np.inf)
         for i, region in enumerate(self.focal_regions):
+            if self.debug:
+                print(f'Region {i}:')
+                print(region)
             raw_preferences = region.get_action_preferences(self.history, agent_id)
             # preferences = self.sigmoid(raw_preferences)
             preferences = self.normalized_logistic(np.array(raw_preferences))
             if self.debug:
-                print(f'Similarities according to region {i}: {raw_preferences}')
-                print(f'\tSigmoid similarities: {preferences}')
-            action_preferences += preferences
+                print(f'Similarities according to region {i}:')
+                print(f'\tRaw similarities: {[f"{round(score, 2)}" for score in raw_preferences]}')
+                print(f'\tSigmoid similarities: {[f"{round(score, 2)}" for score in preferences]}')
+            # action_preferences += preferences
+            action_preferences = np.maximum(action_preferences, preferences)
         if self.debug:
-            print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
-        if np.sum(action_preferences) == 0:
-            action_preferences = np.array([0.5, 0.5])
-        else:
-            action_preferences /= np.sum(action_preferences)
+            # print(f'Aggregated preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
+            print(f'Max preferences: (no go={np.max(action_preferences[0])}; go={np.max(action_preferences[1])})')
+
+        # if np.sum(action_preferences) == 0:
+        #     action_preferences = np.array([0.5, 0.5])
+        # else:
+        #     action_preferences /= np.sum(action_preferences)
+
+        # action_preferences = self.softmax(action_preferences)
+
         if self.debug:
             print(f'Normalized preferences: (no go={action_preferences[0]}; go={action_preferences[1]})')
+
         return action_preferences
+
+    def softmax(self, x: np.ndarray) -> np.ndarray:
+        x = np.asarray(x, dtype=float)
+        x = x - np.max(x)
+        exp_x = np.exp(x)
+        return exp_x / np.sum(exp_x)
 
     def normalized_logistic(self, x: np.ndarray) -> float:
         """
@@ -482,12 +513,7 @@ class SetFocalRegions:
         #----------------------------------------
         for i, regions in enumerate(list_regions):
             if len(regions) > target_lengths[i]:
-                idx_regions = self.rng.choice(
-                    range(len(regions)),
-                    size=target_lengths[i],
-                    replace=False
-                )
-                list_regions[i] = [regions[i] for i in idx_regions]
+                list_regions[i] = regions[:target_lengths[i]]
             elif 0 < len(regions) < target_lengths[i]:
                 idx_regions = [i % len(regions) for i in range(target_lengths[i])]
                 list_regions[i] = [regions[i] for i in idx_regions]

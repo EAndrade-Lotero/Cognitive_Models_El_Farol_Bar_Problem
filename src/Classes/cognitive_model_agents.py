@@ -2088,7 +2088,8 @@ class FocalRegionAgent(CogMod):
 
     @staticmethod
     def name():
-        return 'Focal Schemata'
+        # return 'Focal Schemata'
+        return 'ICSM'
     
     @staticmethod
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
