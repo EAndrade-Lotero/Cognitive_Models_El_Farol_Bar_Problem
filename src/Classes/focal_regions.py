@@ -558,7 +558,7 @@ class SetFocalRegions:
         # ones back to the categories that can still fill them
         #----------------------------------------
         target_lengths = [0] * len(lengths)
-        remaining = self.max_regions
+        remaining = int(self.max_regions)
         while remaining > 0:
             candidates = [i for i, l in enumerate(lengths) if target_lengths[i] < l]
             if not candidates:

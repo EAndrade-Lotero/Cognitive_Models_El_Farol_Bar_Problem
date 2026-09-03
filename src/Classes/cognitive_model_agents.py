@@ -2479,8 +2479,8 @@ class PayoffICSMMixin:
         )
         self.len_history = free_parameters['len_history']
         if 'max_regions' in free_parameters.keys():
-            self.max_regions = free_parameters['max_regions']
-            sfr.max_regions = free_parameters['max_regions']
+            self.max_regions = int(free_parameters['max_regions'])
+            sfr.max_regions = self.max_regions
         if 'c' in free_parameters.keys():
             self.c = free_parameters['c']
             sfr.c = free_parameters['c']
@@ -2510,7 +2510,7 @@ class PayoffICSMMixin:
         return {
             'len_history': (1, 4),
             'c': (0.5, 1),
-            'max_regions': (1, 10),
+            # 'max_regions': (1, 10),
             'delta': (0, 0.2),
         }
 
@@ -2635,6 +2635,49 @@ class FRAplus(AttendanceM2):
         }
 
 
+class FairnessPayoffICSMM1(PayoffICSMMixin, FairnessM1):
+    '''Fairness+payoff Q-learning (unconditioned) mixed with ICSM preferences.'''
+
+    @staticmethod
+    def name():
+        return 'Fairness+Payoff+ICSM-M1'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = FairnessM1.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+class FairnessPayoffICSMM2(PayoffICSMMixin, FairnessM2):
+    '''Fairness+payoff Q-learning conditioned on own action and attendance, mixed with ICSM.'''
+
+    @staticmethod
+    def name():
+        return 'Fairness+Payoff+ICSM-M2'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = FairnessM2.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+class FairnessPayoffICSMM3(PayoffICSMMixin, FairnessM3):
+    '''Fairness+payoff Q-learning conditioned on the full previous state, mixed with ICSM.'''
+
+    @staticmethod
+    def name():
+        return 'Fairness+Payoff+ICSM-M3'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = FairnessM3.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+FairnessPayoffICSM = FairnessPayoffICSMM2
 
 
 MODELS = [
@@ -2648,6 +2691,7 @@ MODELS = [
     MFPM1, MFPM2, MFPM3, 
     FocalRegionAgent, FRAplus,
     PayoffICSMM1, PayoffICSMM2, PayoffICSMM3,
+    FairnessPayoffICSMM1, FairnessPayoffICSMM2, FairnessPayoffICSMM3,
     OnlyFairnessM1, OnlyFairnessM2, OnlyFairnessM3,
     OnlyAttendanceM1, OnlyAttendanceM2, OnlyAttendanceM3,
 ]
