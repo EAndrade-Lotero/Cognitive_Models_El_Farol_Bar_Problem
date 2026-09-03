@@ -1,1 +1,0 @@
-{"model_name": "ICSM", "ICSM": {"model": "FocalRegionAgent", "fixed_parameters": {}, "free_parameters": {"inverse_temperature": 1.579746697254895, "len_history": 2.4018535748977294, "c": 0.9217821733997877}, "deviance": -21267.755581379934, "AIC": 42541.51116275987}}

@@ -1392,7 +1392,7 @@ class AttendanceM3(PayoffM3) :
         return bounds
 
 
-class OnlyAttendanceM1(AttendanceM1) :
+class OnlyAttendanceM1(PayoffM1) :
     '''
     Defines the error-driven learning rule based on 
     attendance only.
@@ -1423,9 +1423,23 @@ class OnlyAttendanceM1(AttendanceM1) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = 1
         self.forget = free_parameters['forget']
         self.average_go = 0.0
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        G = average_go
+        if self.debug:
+            print(f"Action taken: {action}")
+            print(f': {average_go}')
+            print(f'Action dependent Average go observed\nfor action {action} in state {self.prev_state_} is: {G}')
+            print(f"Preferences: {self.determine_action_preferences()}")
+        return G
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
 
     @staticmethod
     def name():
@@ -1440,7 +1454,7 @@ class OnlyAttendanceM1(AttendanceM1) :
         return bounds
 
 
-class OnlyAttendanceM2(AttendanceM2) :
+class OnlyAttendanceM2(PayoffM2) :
     '''
     Defines the error-driven learning rule based on 
     attendance only.
@@ -1472,9 +1486,23 @@ class OnlyAttendanceM2(AttendanceM2) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = 1
         self.forget = free_parameters['forget']
         self.average_go = 0.0
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        G = average_go
+        if self.debug:
+            print(f"Action taken: {action}")
+            print(f': {average_go}')
+            print(f'Action dependent Average go observed\nfor action {action} in state {self.prev_state_} is: {G}')
+            print(f"Preferences: {self.determine_action_preferences()}")
+        return G
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
 
     @staticmethod
     def name():
@@ -1489,7 +1517,7 @@ class OnlyAttendanceM2(AttendanceM2) :
         return bounds
 
 
-class OnlyAttendanceM3(AttendanceM3) :
+class OnlyAttendanceM3(PayoffM3) :
     '''
     Defines the error-driven learning rule based on 
     attendance only.
@@ -1520,9 +1548,23 @@ class OnlyAttendanceM3(AttendanceM3) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = 1
         self.forget = free_parameters['forget']
         self.average_go = 0.0
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        G = average_go
+        if self.debug:
+            print(f"Action taken: {action}")
+            print(f': {average_go}')
+            print(f'Action dependent Average go observed\nfor action {action} in state {self.prev_state_} is: {G}')
+            print(f"Preferences: {self.determine_action_preferences()}")
+        return G
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
 
     @staticmethod
     def name():
@@ -1742,7 +1784,7 @@ class FairnessM1(AttendanceM1) :
             'bias': (0, 1),
             'forget': (0, 1),
             'weight_advantageous_inequality': (0, 1),
-            'weight_disadvantageous_inequality': (0, 5),
+            'weight_disadvantageous_inequality': (0, 50),
         })
         return bounds
 
@@ -1836,7 +1878,7 @@ class FairnessM2(AttendanceM2) :
             'bias': (0, 1),
             'forget': (0, 1),
             'weight_advantageous_inequality': (0, 1),
-            'weight_disadvantageous_inequality': (0, 5),
+            'weight_disadvantageous_inequality': (0, 50),
         })
         return bounds
     
@@ -1882,7 +1924,7 @@ class FairnessM3(AttendanceM3) :
         new_advantageous_inequality = max(0, average_go - relevant_comparison)
         new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
         fairness = -self.weight_advantageous_inequality * new_advantageous_inequality 
-        fariness -= self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        fairness -= self.weight_disadvantageous_inequality * new_disadvantageous_inequality
         # Get payoff
         payoff = self.payoff(action, obs_state)
         G = self.bias * fairness + (1 - self.bias) * payoff
@@ -1908,7 +1950,7 @@ class FairnessM3(AttendanceM3) :
             'bias': (0, 1),
             'forget': (0, 1),
             'weight_advantageous_inequality': (0, 1),
-            'weight_disadvantageous_inequality': (0, 5),
+            'weight_disadvantageous_inequality': (0, 50),
         })
         return bounds
 
@@ -1917,31 +1959,13 @@ class FairnessM3(AttendanceM3) :
         return 'Fairness-M3'
 
 
-class OnlyFairnessM1(FairnessM1) :
+class OnlyFairnessM1(PayoffM1) :
     '''
     Defines the error-driven learning rule based on 
     fairness only.
     This model conditions G on the previous action 
     and aggregate state.
     '''
-    def __init__(
-                self, 
-                free_parameters:Optional[Dict[str, Any]]={}, 
-                fixed_parameters:Optional[Dict[str, Any]]={}, 
-                n:Optional[int]=1
-            ) -> None:
-        #----------------------
-        # Initialize superclass
-        #----------------------
-        super().__init__(
-            free_parameters=free_parameters, 
-            fixed_parameters=fixed_parameters, 
-            n=n
-        )
-        #----------------------
-        # Bookkeeping for model parameters
-        #----------------------
-        self.ingest_parameters(fixed_parameters, free_parameters)
 
     def ingest_parameters(
                 self, 
@@ -1949,9 +1973,32 @@ class OnlyFairnessM1(FairnessM1) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = 1
         self.forget = free_parameters['forget']
         self.average_go = 0.0
+        self.individual_threshold = fixed_parameters["threshold"]
+        self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
+        self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        relevant_comparison = self.individual_threshold
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        new_advantageous_inequality = max(0, average_go - relevant_comparison)
+        new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
+        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        G = fairness
+        if self.debug:
+            print(f"Action taken: {action}")
+            print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
+            print(f'New advantageous inequality: {new_advantageous_inequality}')
+            print(f'New disadvantageous inequality: {new_disadvantageous_inequality}')
+            print(f'Action dependent fairness: {fairness}')
+            print(f'Action dependent fairness observed\nfor action {action} in state {self.prev_state_} is: {G}')
+        return G
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
 
     @staticmethod
     def name():
@@ -1961,36 +2008,20 @@ class OnlyFairnessM1(FairnessM1) :
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM1.bounds(fixed_parameters)
         bounds.update({
-            'forget': (0, 1)
+            'forget': (0, 1),
+            'weight_advantageous_inequality': (0, 1),
+            'weight_disadvantageous_inequality': (0, 50),
         })
         return bounds
 
 
-class OnlyFairnessM2(FairnessM2) :
+class OnlyFairnessM2(PayoffM2) :
     '''
     Defines the error-driven learning rule based on 
     attendance only.
     This model conditions G on the previous action 
     and aggregate state.
     '''
-    def __init__(
-                self, 
-                free_parameters:Optional[Dict[str, Any]]={}, 
-                fixed_parameters:Optional[Dict[str, Any]]={}, 
-                n:Optional[int]=1
-            ) -> None:
-        #----------------------
-        # Initialize superclass
-        #----------------------
-        super().__init__(
-            free_parameters=free_parameters, 
-            fixed_parameters=fixed_parameters, 
-            n=n
-        )
-        #----------------------
-        # Bookkeeping for model parameters
-        #----------------------
-        self.ingest_parameters(fixed_parameters, free_parameters)
 
     def ingest_parameters(
                 self, 
@@ -1998,9 +2029,32 @@ class OnlyFairnessM2(FairnessM2) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = 1
         self.forget = free_parameters['forget']
         self.average_go = 0.0
+        self.individual_threshold = fixed_parameters["threshold"]
+        self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
+        self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        relevant_comparison = self.individual_threshold
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        new_advantageous_inequality = max(0, average_go - relevant_comparison)
+        new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
+        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        G = fairness
+        if self.debug:
+            print(f"Action taken: {action}")
+            print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
+            print(f'New advantageous inequality: {new_advantageous_inequality}')
+            print(f'New disadvantageous inequality: {new_disadvantageous_inequality}')
+            print(f'Action dependent fairness: {fairness}')
+            print(f'Action dependent fairness observed\nfor action {action} in state {self.prev_state_} is: {G}')
+        return G
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
 
     @staticmethod
     def name():
@@ -2010,36 +2064,20 @@ class OnlyFairnessM2(FairnessM2) :
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM2.bounds(fixed_parameters)
         bounds.update({
-            'forget': (0, 1)
+            'forget': (0, 1),
+            'weight_advantageous_inequality': (0, 1),
+            'weight_disadvantageous_inequality': (0, 50),
         })
         return bounds
 
 
-class OnlyFairnessM3(FairnessM3) :
+class OnlyFairnessM3(PayoffM3) :
     '''
     Defines the error-driven learning rule based on 
     fairness only.
     This model conditions G on the previous actions vector, the full-state.
     and aggregate state.
     '''
-    def __init__(
-                self, 
-                free_parameters:Optional[Dict[str, Any]]={}, 
-                fixed_parameters:Optional[Dict[str, Any]]={}, 
-                n:Optional[int]=1
-            ) -> None:
-        #----------------------
-        # Initialize superclass
-        #----------------------
-        super().__init__(
-            free_parameters=free_parameters, 
-            fixed_parameters=fixed_parameters, 
-            n=n
-        )
-        #----------------------
-        # Bookkeeping for model parameters
-        #----------------------
-        self.ingest_parameters(fixed_parameters, free_parameters)
 
     def ingest_parameters(
                 self, 
@@ -2047,9 +2085,33 @@ class OnlyFairnessM3(FairnessM3) :
                 free_parameters:Dict[str, Any]
             ) -> None:
         super().ingest_parameters(fixed_parameters, free_parameters)
-        self.bias = 1
         self.forget = free_parameters['forget']
         self.average_go = 0.0
+        self.individual_threshold = fixed_parameters["threshold"]
+        self.weight_advantageous_inequality = free_parameters["weight_advantageous_inequality"]
+        self.weight_disadvantageous_inequality = free_parameters["weight_disadvantageous_inequality"]
+
+    def _get_G(self, obs_state: Tuple[int]) -> float:
+        relevant_comparison = self.individual_threshold
+        action = obs_state[self.number]
+        average_go = self._update_average_go(action)
+        new_advantageous_inequality = max(0, average_go - relevant_comparison)
+        new_disadvantageous_inequality = max(0, relevant_comparison - average_go)
+        fairness = -self.weight_advantageous_inequality * new_advantageous_inequality - self.weight_disadvantageous_inequality * new_disadvantageous_inequality
+        G = fairness
+        if self.debug:
+            print(f"Action taken: {action}")
+            print(f"Fair amount: {relevant_comparison} --- Average go: {average_go}")
+            print(f'New advantageous inequality: {new_advantageous_inequality}')
+            print(f'New disadvantageous inequality: {new_disadvantageous_inequality}')
+            print(f'Action dependent fairness: {fairness}')
+            print(f'Action dependent fairness observed\nfor action {action} in state {self.prev_state_} is: {G}')
+        return G
+
+    def _update_average_go(self, action: int) -> float:
+        self.average_go = self.average_go * self.forget + action * (1 - self.forget)
+        return self.average_go
+
 
     @staticmethod
     def name():
@@ -2059,7 +2121,9 @@ class OnlyFairnessM3(FairnessM3) :
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
         bounds = PayoffM3.bounds(fixed_parameters)
         bounds.update({
-            'forget': (0, 1)
+            'forget': (0, 1),
+            'weight_advantageous_inequality': (0, 1),
+            'weight_disadvantageous_inequality': (0, 50),
         })
         return bounds
 
@@ -2393,6 +2457,109 @@ class FocalRegionAgent(CogMod):
         }
 
 
+class PayoffICSMMixin:
+    '''
+    Mixes payoff Q-preferences with ICSM (focal-region) preferences.
+    Conditioning on state is inherited from PayoffM1/M2/M3; this mixin
+    only changes how action preferences are combined and how history
+    is stored.
+    '''
+
+    def ingest_parameters(
+                self,
+                fixed_parameters: Dict[str, Any],
+                free_parameters: Dict[str, Any]
+            ) -> None:
+        super().ingest_parameters(fixed_parameters, free_parameters)
+        sfr = SetFocalRegions(
+            num_agents=self.fixed_parameters['num_agents'],
+            threshold=self.fixed_parameters['threshold'],
+            len_history=self.free_parameters['len_history'],
+            from_file=True, ##### <= MODIFY TO CHERRYPICK OR NOT
+        )
+        self.len_history = free_parameters['len_history']
+        if 'max_regions' in free_parameters.keys():
+            self.max_regions = free_parameters['max_regions']
+            sfr.max_regions = free_parameters['max_regions']
+        if 'c' in free_parameters.keys():
+            self.c = free_parameters['c']
+            sfr.c = free_parameters['c']
+        if 'steepness' in free_parameters.keys():
+            self.steepness = free_parameters['steepness']
+            sfr.steepness = free_parameters['steepness']
+        sfr.generate_focal_regions()
+        self.sfr = sfr
+        self.delta = free_parameters['delta']
+
+    def determine_action_preferences(self) -> List[float]:
+        Q_preferences = super().determine_action_preferences()
+        if self.sfr.history is None:
+            return Q_preferences
+        FRA_preferences = self.sfr.get_action_preferences(self.number)
+        preferences = self.delta * FRA_preferences + (1 - self.delta) * Q_preferences
+        if self.debug:
+            print(f'Preferences: {preferences}')
+        return preferences
+
+    def update(self, score: int, obs_state: List[int]) -> None:
+        self.sfr.add_history(obs_state)
+        super().update(score, obs_state)
+
+    @staticmethod
+    def extra_bounds() -> Dict[str, Tuple[int, int]]:
+        return {
+            'len_history': (1, 4),
+            'c': (0.5, 1),
+            'max_regions': (1, 10),
+            'delta': (0, 0.2),
+        }
+
+
+class PayoffICSMM1(PayoffICSMMixin, PayoffM1):
+    '''Unconditioned payoff Q-learning mixed with ICSM preferences.'''
+
+    @staticmethod
+    def name():
+        return 'Payoff+ICSM-M1'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM1.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+class PayoffICSMM2(PayoffICSMMixin, PayoffM2):
+    '''Payoff Q-learning conditioned on own action and attendance, mixed with ICSM.'''
+
+    @staticmethod
+    def name():
+        return 'Payoff+ICSM-M2'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM2.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+class PayoffICSMM3(PayoffICSMMixin, PayoffM3):
+    '''Payoff Q-learning conditioned on the full previous state, mixed with ICSM.'''
+
+    @staticmethod
+    def name():
+        return 'Payoff+ICSM-M3'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = PayoffM3.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+PayoffICSM = PayoffICSMM1
+
+
 class FRAplus(AttendanceM2):
     def __init__(
                 self, 
@@ -2479,7 +2646,10 @@ MODELS = [
     AvailableSpaceM1, AvailableSpaceM2, AvailableSpaceM3,
     FairnessM1, FairnessM2, FairnessM3,
     MFPM1, MFPM2, MFPM3, 
-    FocalRegionAgent, FRAplus
+    FocalRegionAgent, FRAplus,
+    PayoffICSMM1, PayoffICSMM2, PayoffICSMM3,
+    OnlyFairnessM1, OnlyFairnessM2, OnlyFairnessM3,
+    OnlyAttendanceM1, OnlyAttendanceM2, OnlyAttendanceM3,
 ]
 
 M1_MODELS = [model for model in MODELS if model.name().split('-')[-1] == 'M1']
