@@ -2511,7 +2511,7 @@ class PayoffICSMMixin:
             'len_history': (1, 4),
             'c': (0.5, 1),
             # 'max_regions': (1, 10),
-            'delta': (0, 0.2),
+            'delta': (0, 1),
         }
 
 
@@ -2680,6 +2680,51 @@ class FairnessPayoffICSMM3(PayoffICSMMixin, FairnessM3):
 FairnessPayoffICSM = FairnessPayoffICSMM2
 
 
+class AttendancePayoffICSMM1(PayoffICSMMixin, AttendanceM1):
+    '''Attendance+payoff Q-learning (unconditioned) mixed with ICSM preferences.'''
+
+    @staticmethod
+    def name():
+        return 'Attendance+Payoff+ICSM-M1'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = AttendanceM1.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+class AttendancePayoffICSMM2(PayoffICSMMixin, AttendanceM2):
+    '''Attendance+payoff Q-learning conditioned on own action and attendance, mixed with ICSM.'''
+
+    @staticmethod
+    def name():
+        return 'Attendance+Payoff+ICSM-M2'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = AttendanceM2.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+class AttendancePayoffICSMM3(PayoffICSMMixin, AttendanceM3):
+    '''Attendance+payoff Q-learning conditioned on the full previous state, mixed with ICSM.'''
+
+    @staticmethod
+    def name():
+        return 'Attendance+Payoff+ICSM-M3'
+
+    @staticmethod
+    def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
+        bounds = AttendanceM3.bounds(fixed_parameters)
+        bounds.update(PayoffICSMMixin.extra_bounds())
+        return bounds
+
+
+AttendancePayoffICSM = AttendancePayoffICSMM2
+
+
 MODELS = [
     # PriorsM1, PriorsM2, PriorsM3,
     Random,
@@ -2692,6 +2737,7 @@ MODELS = [
     FocalRegionAgent, FRAplus,
     PayoffICSMM1, PayoffICSMM2, PayoffICSMM3,
     FairnessPayoffICSMM1, FairnessPayoffICSMM2, FairnessPayoffICSMM3,
+    AttendancePayoffICSMM1, AttendancePayoffICSMM2, AttendancePayoffICSMM3,
     OnlyFairnessM1, OnlyFairnessM2, OnlyFairnessM3,
     OnlyAttendanceM1, OnlyAttendanceM2, OnlyAttendanceM3,
 ]
