@@ -289,6 +289,7 @@ class SetFocalRegions:
         self.steepness = steepness
         self.focal_regions = []
         self.add_empirical_focal_regions = add_empirical_focal_regions
+        max_regions = 6
         self.max_regions = min(int(max_regions), num_agents*2)
         self.history = None
         self.debug = False
