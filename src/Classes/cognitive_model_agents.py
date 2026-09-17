@@ -2650,8 +2650,19 @@ class FairnessPayoffICSMM1(PayoffICSMMixin, FairnessM1):
 
     @staticmethod
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
-        bounds = FairnessM1.bounds(fixed_parameters)
-        bounds.update(PayoffICSMMixin.extra_bounds())
+        # bounds = FairnessM1.bounds(fixed_parameters)
+        # bounds.update(PayoffICSMMixin.extra_bounds())
+        bounds = {
+            'inverse_temperature': (0, 10),
+            'learning_rate': (0, 0.1),
+            'bias': (0, 0.5),
+            'forget': (0, 1),
+            'weight_advantageous_inequality': (0, 1),
+            'weight_disadvantageous_inequality': (0, 50),
+            'len_history': (1, 4),
+            'c': (0.5, 1),
+            'delta': (0, 0.2),
+        }
         return bounds
 
 
