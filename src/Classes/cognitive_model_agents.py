@@ -1253,11 +1253,17 @@ class AttendanceM1(PayoffM1) :
 
     @staticmethod
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
-        bounds = PayoffM1.bounds(fixed_parameters)
-        bounds.update({
-            'bias': (0, 1),
-            'forget': (0, 1)
-        })
+        # bounds = PayoffM1.bounds(fixed_parameters)
+        # bounds.update({
+        #     'bias': (0, 1),
+        #     'forget': (0, 1)
+        # })
+        bounds = {
+            'inverse_temperature': (5, 36),
+            'learning_rate': (0.001, 0.3),
+            'bias': (0.8, 1),
+            'forget': (0.8, 1)
+        }
         return bounds
 
 
@@ -2689,8 +2695,17 @@ class AttendancePayoffICSMM1(PayoffICSMMixin, AttendanceM1):
 
     @staticmethod
     def bounds(fixed_parameters: Dict[str, Any]) -> Dict[str, Tuple[int, int]]:
-        bounds = AttendanceM1.bounds(fixed_parameters)
-        bounds.update(PayoffICSMMixin.extra_bounds())
+        # bounds = AttendanceM1.bounds(fixed_parameters)
+        # bounds.update(PayoffICSMMixin.extra_bounds())
+        bounds = {
+            'inverse_temperature': (5, 36),
+            'learning_rate': (0.001, 0.3),
+            'bias': (0.8, 1),
+            'forget': (0.8, 1),
+            'len_history': (1, 4),
+            'c': (0.5, 1),
+            'delta': (0, 0.2),
+        }
         return bounds
 
 
