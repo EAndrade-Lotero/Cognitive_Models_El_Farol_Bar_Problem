@@ -155,7 +155,10 @@ class Episode :
         data_frames= list()
         list_sim_ids = list()
         # Run the number of episodes
-        for t in tqdm(range(num_episodes), leave=False):
+        tqdm_kwargs = {'leave': False}
+        if self.model:
+            tqdm_kwargs['desc'] = str(self.model)
+        for t in tqdm(range(num_episodes), **tqdm_kwargs):
             id_ = uuid.uuid1()
             id_ = OrderStrings.add_number_if_repeated(id_, list_sim_ids)
             list_sim_ids.append(id_)
@@ -660,10 +663,11 @@ class Performer :
         #-------------------------------
         # Create simulation
         #-------------------------------
+        model_name = agent_class.name() if hasattr(agent_class, 'name') else agent_class.__name__
         episode = Episode(
-            environment=bar,\
-            agents=agents,\
-            model='',\
+            environment=bar,
+            agents=agents,
+            model=model_name,
             num_rounds=num_rounds
         )
         # #-------------------------------
