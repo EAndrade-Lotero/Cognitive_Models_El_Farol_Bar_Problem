@@ -1,5 +1,6 @@
 # Data
 *.csv
+data/simulated/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
