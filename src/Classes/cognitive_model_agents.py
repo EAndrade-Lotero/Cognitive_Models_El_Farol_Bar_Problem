@@ -2653,15 +2653,15 @@ class FairnessPayoffICSMM1(PayoffICSMMixin, FairnessM1):
         # bounds = FairnessM1.bounds(fixed_parameters)
         # bounds.update(PayoffICSMMixin.extra_bounds())
         bounds = {
-            'inverse_temperature': (0, 10),
+            'inverse_temperature': (30, 36),
             'learning_rate': (0, 0.1),
-            'bias': (0, 0.5),
+            'bias': (0, 0.2),
             'forget': (0, 1),
             'weight_advantageous_inequality': (0, 1),
             'weight_disadvantageous_inequality': (0, 50),
             'len_history': (1, 4),
-            'c': (0.5, 1),
-            'delta': (0, 0.2),
+            'c': (0.8, 1),
+            'delta': (0, 0.1),
         }
         return bounds
 
